@@ -7,7 +7,7 @@
 #ifndef _LOGVIAMQTT_H_
 #define _LOGVIAMQTT_H_
 
-struct statistics;
+struct statistics_rtt;
 enum stat_frame_type;
 
 struct log_via_mqtt_thread_context {
@@ -19,7 +19,7 @@ struct log_via_mqtt_thread_context {
 };
 
 struct log_via_mqtt_thread_context *log_via_mqtt_thread_create(void);
-void log_via_mqtt_stats(enum stat_frame_type frame_type, struct statistics *stats);
+void log_via_mqtt_stats(enum stat_frame_type frame_type, struct statistics_rtt *stats);
 void log_via_mqtt_thread_stop(struct log_via_mqtt_thread_context *thread_context);
 void log_via_mqtt_thread_free(struct log_via_mqtt_thread_context *thread_context);
 void log_via_mqtt_thread_wait_for_finish(struct log_via_mqtt_thread_context *thread_context);

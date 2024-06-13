@@ -110,7 +110,7 @@ void log_message(enum log_level level, const char *format, ...)
 static void log_add_traffic_class(const char *name, enum stat_frame_type frame_type, char **buffer,
 				  size_t *length)
 {
-	const struct statistics *stat = &global_statistics[frame_type];
+	const struct statistics_rtt *stat = &global_statistics_rtt[frame_type];
 	int written;
 
 	written = snprintf(*buffer, *length,

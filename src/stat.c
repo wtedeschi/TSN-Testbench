@@ -17,9 +17,9 @@
 #include "stat.h"
 #include "utils.h"
 
-struct statistics global_statistics[NUM_FRAME_TYPES];
-struct statistics global_statistics_per_period[NUM_FRAME_TYPES];
-struct statistics global_statistics_per_period_prep[NUM_FRAME_TYPES];
+struct statistics_rtt global_statistics_rtt[NUM_FRAME_TYPES];
+struct statistics_rtt global_statistics_rtt_per_period[NUM_FRAME_TYPES];
+struct statistics_rtt global_statistics_rtt_per_period_prep[NUM_FRAME_TYPES];
 struct round_trip_context round_trip_contexts[NUM_FRAME_TYPES];
 static uint64_t rtt_expected_rt_limit;
 static int log_stat_user_selected;
@@ -72,11 +72,11 @@ int stat_init(unsigned int local_log_rtt)
             return -ENOMEM;
 
         for (int i = 0; i < NUM_FRAME_TYPES; i++) {
-            struct statistics *current_stats = &global_statistics[i];
+            struct statistics_rtt *current_stats = &global_statistics_rtt[i];
 
             current_stats->round_trip_min = UINT64_MAX;
             current_stats->round_trip_max = 0;
-            current_stats = &global_statistics_per_period[i];
+            current_stats = &global_statistics_rtt_per_period[i];
             current_stats->round_trip_min = UINT64_MAX;
             current_stats->round_trip_max = 0;
         }
@@ -120,7 +120,7 @@ void stat_free(void)
 void stat_frame_sent(enum stat_frame_type frame_type, uint64_t cycle_number)
 {
 	struct round_trip_context *rtt = &round_trip_contexts[frame_type];
-	struct statistics *stat = &global_statistics[frame_type];
+	struct statistics_rtt *stat = &global_statistics_rtt[frame_type];
 	struct timespec tx_time = {};
 
 	log_message(LOG_LEVEL_DEBUG, "%s: frame[%" PRIu64 "] sent\n",
@@ -143,9 +143,9 @@ static inline void stat_update_min_max(uint64_t new_value, uint64_t *min, uint64
 }
 
 #if defined(WITH_MQTT)
-static void stats_reset_stats(struct statistics *stats)
+static void stats_reset_stats(struct statistics_rtt *stats)
 {
-	memset(stats, 0, sizeof(struct statistics));
+	memset(stats, 0, sizeof(struct statistics_rtt));
 	stats->round_trip_min = UINT64_MAX;
 }
 
@@ -153,7 +153,7 @@ static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint
 					   uint64_t rt_time, bool out_of_order,
 					   bool payload_mismatch, bool frame_id_mismatch)
 {
-	struct statistics *stat_per_period_pre = &global_statistics_per_period_prep[frame_type];
+	struct statistics_rtt *stat_per_period_pre = &global_statistics_rtt_per_period_prep[frame_type];
 	uint64_t elapsed_t;
 
 	if (stat_per_period_pre->first_time_stamp == 0)
@@ -189,8 +189,8 @@ static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint
 	 * preparation
 	 */
 	if (stat_per_period_pre->ready) {
-		log_via_mqtt_stats(frame_type, &global_statistics_per_period_prep[frame_type]);
-		stats_reset_stats(&global_statistics_per_period_prep[frame_type]);
+		log_via_mqtt_stats(frame_type, &global_statistics_rtt_per_period_prep[frame_type]);
+		stats_reset_stats(&global_statistics_rtt_per_period_prep[frame_type]);
 	}
 }
 #else
@@ -205,7 +205,7 @@ void stat_frame_received(enum stat_frame_type frame_type, uint64_t cycle_number,
 			 bool payload_mismatch, bool frame_id_mismatch)
 {
 	struct round_trip_context *rtt = &round_trip_contexts[frame_type];
-	struct statistics *stat = &global_statistics[frame_type];
+	struct statistics_rtt *stat = &global_statistics_rtt[frame_type];
 	struct timespec rx_time = {};
 	uint64_t rt_time, curr_time;
 

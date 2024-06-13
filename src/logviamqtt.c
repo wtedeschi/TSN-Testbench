@@ -52,7 +52,7 @@ void log_via_mqtt_free(void)
 
 static struct ring_buffer *log_via_mqtt_global_log_ring_buffer;
 
-struct log_statistics {
+struct log_rtt_statistics {
 	enum stat_frame_type frame_type;
 	uint64_t time_stamp;
 	uint64_t frames_sent;
@@ -75,9 +75,9 @@ int log_via_mqtt_init(void)
 	return 0;
 }
 
-void log_via_mqtt_stats(enum stat_frame_type frame_type, struct statistics *stats)
+void log_via_mqtt_stats(enum stat_frame_type frame_type, struct statistics_rtt *stats)
 {
-	struct log_statistics internal;
+	struct log_rtt_statistics internal;
 
 	internal.frame_type = frame_type;
 	internal.time_stamp = stats->last_time_stamp;
@@ -92,11 +92,11 @@ void log_via_mqtt_stats(enum stat_frame_type frame_type, struct statistics *stat
 	internal.round_trip_avg = stats->round_trip_avg;
 
 	ring_buffer_add(log_via_mqtt_global_log_ring_buffer, (const unsigned char *)&internal,
-			sizeof(struct log_statistics));
+			sizeof(struct log_rtt_statistics));
 }
 
 static void log_via_mqtt_add_traffic_class(struct mosquitto *mosq, const char *mqtt_base_topic_name,
-					   struct log_statistics *stat)
+					   struct log_rtt_statistics *stat)
 {
 	char stat_message[1024] = {}, *p;
 	size_t stat_message_length;
@@ -157,7 +157,7 @@ static void *log_via_mqtt_thread_routine(void *data)
 {
 	uint64_t period_ns = app_config.log_via_mqtt_thread_period_ns;
 	struct log_via_mqtt_thread_context *mqtt_context = data;
-	struct log_statistics stats[10 * NUM_FRAME_TYPES];
+	struct log_rtt_statistics stats[10 * NUM_FRAME_TYPES];
 	int ret, connect_status;
 	struct timespec time;
 	size_t log_data_len;
@@ -198,7 +198,7 @@ static void *log_via_mqtt_thread_routine(void *data)
 	}
 
 	while (!mqtt_context->stop) {
-		struct log_statistics *curr_stats;
+		struct log_rtt_statistics *curr_stats;
 		int nof_read_elements;
 
 		increment_period(&time, period_ns);
@@ -210,9 +210,9 @@ static void *log_via_mqtt_thread_routine(void *data)
 
 		ring_buffer_fetch(mqtt_context->mqtt_log_ring_buffer, (unsigned char *)&stats,
 				  sizeof(stats), &log_data_len);
-		nof_read_elements = log_data_len / sizeof(struct log_statistics);
+		nof_read_elements = log_data_len / sizeof(struct log_rtt_statistics);
 
-		curr_stats = (struct log_statistics *)stats;
+		curr_stats = (struct log_rtt_statistics *)stats;
 		for (int i = 0; i < nof_read_elements; i++)
 			log_via_mqtt_add_traffic_class(mqtt_context->mosq,
 						       app_config.log_via_mqtt_measurement_name,

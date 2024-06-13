@@ -49,7 +49,7 @@ static inline const char *stat_frame_type_to_string(enum stat_frame_type frame_t
 	return stat_frame_type_names[frame_type];
 }
 
-struct statistics {
+struct statistics_rtt {
 	uint64_t first_time_stamp;
 	uint64_t last_time_stamp;
 	uint64_t frames_sent;
@@ -66,8 +66,8 @@ struct statistics {
 	bool ready;
 };
 
-extern struct statistics global_statistics[NUM_FRAME_TYPES];
-extern struct statistics global_statistics_per_period[NUM_FRAME_TYPES];
+extern struct statistics_rtt global_statistics_rtt[NUM_FRAME_TYPES];
+extern struct statistics_rtt global_statistics_rtt_per_period[NUM_FRAME_TYPES];
 
 struct round_trip_context {
 	int64_t *backlog;
