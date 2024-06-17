@@ -130,6 +130,9 @@ static int lldp_gen_and_send_frames(struct thread_context *thread_context, int s
 	struct reference_meta_data *meta;
 	struct ethhdr *eth;
 	int len, i;
+	struct timespec tx_time = {};
+
+	clock_gettime(app_config.application_clock_id, &tx_time);
 
 	/* Adjust meta data */
 	for (i = 0; i < app_config.lldp_num_frames_per_cycle; i++) {
@@ -137,6 +140,8 @@ static int lldp_gen_and_send_frames(struct thread_context *thread_context, int s
 						      sizeof(*eth));
 		sequence_counter_to_meta_data(meta, sequence_counter_begin + i,
 					      app_config.lldp_num_frames_per_cycle);
+
+		tx_timestamp_to_meta_data(meta, ts_to_ns(&tx_time));
 	}
 
 	/* Send them */
