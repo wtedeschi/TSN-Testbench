@@ -63,7 +63,11 @@ struct log_rtt_statistics {
 	uint64_t round_trip_min;
 	uint64_t round_trip_max;
 	uint64_t round_trip_outliers;
+	uint64_t oneway_min;
+	uint64_t oneway_max;
+	uint64_t oneway_outliers;
 	double round_trip_avg;
+	double oneway_avg;
 };
 
 int log_via_mqtt_init(void)
@@ -86,10 +90,16 @@ void log_via_mqtt_stats(enum stat_frame_type frame_type, struct statistics_rtt *
 	internal.out_of_order_errors = stats->out_of_order_errors;
 	internal.frame_id_errors = stats->frame_id_errors;
 	internal.payload_errors = stats->payload_errors;
+
 	internal.round_trip_min = stats->round_trip_min;
 	internal.round_trip_max = stats->round_trip_max;
 	internal.round_trip_outliers = stats->round_trip_outliers;
-	internal.round_trip_avg = stats->round_trip_avg;
+	internal.round_trip_avg = stats->oneway_avg;
+
+	internal.oneway_min = stats->oneway_min;
+	internal.oneway_max = stats->oneway_max;
+	internal.oneway_outliers = stats->oneway_outliers;
+	internal.oneway_avg = stats->oneway_avg;
 
 	ring_buffer_add(log_via_mqtt_global_log_ring_buffer, (const unsigned char *)&internal,
 			sizeof(struct log_rtt_statistics));
@@ -124,13 +134,17 @@ static void log_via_mqtt_add_traffic_class(struct mosquitto *mosq, const char *m
 			   "\t\t\t\"RoundTripTimeMin\" : %" PRIu64 ",\n"
 			   "\t\t\t\"RoundTripMax\" : %" PRIu64 ",\n"
 			   "\t\t\t\"RoundTripAv\" : %lf,\n"
+			   "\t\t\t\"OnewayTimeMin\" : %" PRIu64 ",\n"
+			   "\t\t\t\"OnewayMax\" : %" PRIu64 ",\n"
+			   "\t\t\t\"OnewayAv\" : %lf,\n"
 			   "\t\t\t\"OutofOrderErrors\" : %" PRIu64 ",\n"
 			   "\t\t\t\"FrameIdErrors\" : %" PRIu64 ",\n"
 			   "\t\t\t\"PayloadErrors\" : %" PRIu64 ",\n"
 			   "\t\t\t\"RoundTripOutliers\" : %" PRIu64 "\n\t\t}",
 			   "stats", stat_frame_type_to_string(stat->frame_type), stat->frames_sent,
 			   stat->frames_received, stat->round_trip_min, stat->round_trip_max,
-			   stat->round_trip_avg, stat->out_of_order_errors, stat->frame_id_errors,
+			   stat->round_trip_avg, stat->oneway_min, stat->oneway_max,
+			   stat->oneway_avg, stat->out_of_order_errors, stat->frame_id_errors,
 			   stat->payload_errors, stat->round_trip_outliers);
 
 	p += written;

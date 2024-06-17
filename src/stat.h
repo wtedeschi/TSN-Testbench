@@ -63,6 +63,12 @@ struct statistics_rtt {
 	uint64_t round_trip_outliers;
 	double round_trip_sum;
 	double round_trip_avg;
+	uint64_t oneway_min;
+	uint64_t oneway_max;
+	uint64_t oneway_count;
+	uint64_t oneway_outliers;
+	double oneway_sum;
+	double oneway_avg;
 	bool ready;
 };
 

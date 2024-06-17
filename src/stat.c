@@ -39,66 +39,67 @@ const char *stat_frame_type_names[NUM_FRAME_TYPES] = {
 
 int stat_init(unsigned int local_log_rtt)
 {
-    if (local_log_rtt && LOG_STAT_RTT) {
-        bool allocation_error = false;
+	if (local_log_rtt && LOG_STAT_RTT) {
+		bool allocation_error = false;
 
-        round_trip_contexts[TSN_HIGH_FRAME_TYPE].backlog_len =
-                STAT_MAX_BACKLOG * app_config.tsn_high_num_frames_per_cycle;
-        round_trip_contexts[TSN_LOW_FRAME_TYPE].backlog_len =
-                STAT_MAX_BACKLOG * app_config.tsn_low_num_frames_per_cycle;
-        round_trip_contexts[RTC_FRAME_TYPE].backlog_len =
-                STAT_MAX_BACKLOG * app_config.rtc_num_frames_per_cycle;
-        round_trip_contexts[RTA_FRAME_TYPE].backlog_len =
-                STAT_MAX_BACKLOG * app_config.rta_num_frames_per_cycle;
-        round_trip_contexts[DCP_FRAME_TYPE].backlog_len =
-                STAT_MAX_BACKLOG * app_config.dcp_num_frames_per_cycle;
-        round_trip_contexts[LLDP_FRAME_TYPE].backlog_len =
-                STAT_MAX_BACKLOG * app_config.lldp_num_frames_per_cycle;
-        round_trip_contexts[UDP_HIGH_FRAME_TYPE].backlog_len =
-                STAT_MAX_BACKLOG * app_config.udp_high_num_frames_per_cycle;
-        round_trip_contexts[UDP_LOW_FRAME_TYPE].backlog_len =
-                STAT_MAX_BACKLOG * app_config.udp_low_num_frames_per_cycle;
-        round_trip_contexts[GENERICL2_FRAME_TYPE].backlog_len =
-                STAT_MAX_BACKLOG * app_config.generic_l2_num_frames_per_cycle;
+		round_trip_contexts[TSN_HIGH_FRAME_TYPE].backlog_len =
+			STAT_MAX_BACKLOG * app_config.tsn_high_num_frames_per_cycle;
+		round_trip_contexts[TSN_LOW_FRAME_TYPE].backlog_len =
+			STAT_MAX_BACKLOG * app_config.tsn_low_num_frames_per_cycle;
+		round_trip_contexts[RTC_FRAME_TYPE].backlog_len =
+			STAT_MAX_BACKLOG * app_config.rtc_num_frames_per_cycle;
+		round_trip_contexts[RTA_FRAME_TYPE].backlog_len =
+			STAT_MAX_BACKLOG * app_config.rta_num_frames_per_cycle;
+		round_trip_contexts[DCP_FRAME_TYPE].backlog_len =
+			STAT_MAX_BACKLOG * app_config.dcp_num_frames_per_cycle;
+		round_trip_contexts[LLDP_FRAME_TYPE].backlog_len =
+			STAT_MAX_BACKLOG * app_config.lldp_num_frames_per_cycle;
+		round_trip_contexts[UDP_HIGH_FRAME_TYPE].backlog_len =
+			STAT_MAX_BACKLOG * app_config.udp_high_num_frames_per_cycle;
+		round_trip_contexts[UDP_LOW_FRAME_TYPE].backlog_len =
+			STAT_MAX_BACKLOG * app_config.udp_low_num_frames_per_cycle;
+		round_trip_contexts[GENERICL2_FRAME_TYPE].backlog_len =
+			STAT_MAX_BACKLOG * app_config.generic_l2_num_frames_per_cycle;
 
-        for (int i = 0; i < NUM_FRAME_TYPES; i++) {
-            struct round_trip_context *current_context = &round_trip_contexts[i];
+		for (int i = 0; i < NUM_FRAME_TYPES; i++) {
+			struct round_trip_context *current_context = &round_trip_contexts[i];
 
-            current_context->backlog = calloc(current_context->backlog_len, sizeof(int64_t));
-            allocation_error |= !current_context->backlog;
-        }
+			current_context->backlog =
+				calloc(current_context->backlog_len, sizeof(int64_t));
+			allocation_error |= !current_context->backlog;
+		}
 
-        if (allocation_error)
-            return -ENOMEM;
+		if (allocation_error)
+			return -ENOMEM;
 
-        for (int i = 0; i < NUM_FRAME_TYPES; i++) {
-            struct statistics_rtt *current_stats = &global_statistics_rtt[i];
+		for (int i = 0; i < NUM_FRAME_TYPES; i++) {
+			struct statistics_rtt *current_stats = &global_statistics_rtt[i];
 
-            current_stats->round_trip_min = UINT64_MAX;
-            current_stats->round_trip_max = 0;
-            current_stats = &global_statistics_rtt_per_period[i];
-            current_stats->round_trip_min = UINT64_MAX;
-            current_stats->round_trip_max = 0;
-        }
+			current_stats->round_trip_min = UINT64_MAX;
+			current_stats->round_trip_max = 0;
+			current_stats = &global_statistics_rtt_per_period[i];
+			current_stats->round_trip_min = UINT64_MAX;
+			current_stats->round_trip_max = 0;
+		}
 
-        if (app_config.debug_stop_trace_on_rtt) {
-            file_tracing_on = fopen("/sys/kernel/debug/tracing/tracing_on", "w");
-            if (!file_tracing_on)
-                return -errno;
-            file_trace_marker = fopen("/sys/kernel/debug/tracing/trace_marker", "w");
-            if (!file_trace_marker) {
-                fclose(file_tracing_on);
-                return -errno;
-            }
-        }
+		if (app_config.debug_stop_trace_on_rtt) {
+			file_tracing_on = fopen("/sys/kernel/debug/tracing/tracing_on", "w");
+			if (!file_tracing_on)
+				return -errno;
+			file_trace_marker = fopen("/sys/kernel/debug/tracing/trace_marker", "w");
+			if (!file_trace_marker) {
+				fclose(file_tracing_on);
+				return -errno;
+			}
+		}
 
-        /*
-         * The expected round trip limit for RT traffic classes is below < 2 * cycle time. Stored in
-         * us.
-         */
-        rtt_expected_rt_limit = app_config.application_base_cycle_time_ns * 2;
-        rtt_expected_rt_limit /= 1000;
-    }
+		/*
+		 * The expected round trip limit for RT traffic classes is below < 2 * cycle time.
+		 * Stored in us.
+		 */
+		rtt_expected_rt_limit = app_config.application_base_cycle_time_ns * 2;
+		rtt_expected_rt_limit /= 1000;
+	}
 
 	log_stat_user_selected = local_log_rtt;
 
@@ -147,13 +148,16 @@ static void stats_reset_stats(struct statistics_rtt *stats)
 {
 	memset(stats, 0, sizeof(struct statistics_rtt));
 	stats->round_trip_min = UINT64_MAX;
+	stats->oneway_min = UINT64_MAX;
 }
 
 static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint64_t curr_time,
-					   uint64_t rt_time, bool out_of_order,
-					   bool payload_mismatch, bool frame_id_mismatch)
+					   uint64_t rt_time, uint64_t oneway_time,
+					   bool out_of_order, bool payload_mismatch,
+					   bool frame_id_mismatch)
 {
-	struct statistics_rtt *stat_per_period_pre = &global_statistics_rtt_per_period_prep[frame_type];
+	struct statistics_rtt *stat_per_period_pre =
+		&global_statistics_rtt_per_period_prep[frame_type];
 	uint64_t elapsed_t;
 
 	if (stat_per_period_pre->first_time_stamp == 0)
@@ -169,15 +173,27 @@ static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint
 		stat_per_period_pre->last_time_stamp = curr_time;
 	}
 
-	if (stat_frame_type_is_real_time(frame_type) && rt_time > rtt_expected_rt_limit)
-		stat_per_period_pre->round_trip_outliers++;
-	stat_update_min_max(rt_time, &stat_per_period_pre->round_trip_min,
-			    &stat_per_period_pre->round_trip_max);
+	if (log_stat_user_selected && LOG_STAT_RTT) {
+		if (stat_frame_type_is_real_time(frame_type) && rt_time > rtt_expected_rt_limit)
+			stat_per_period_pre->round_trip_outliers++;
+		stat_update_min_max(rt_time, &stat_per_period_pre->round_trip_min,
+				    &stat_per_period_pre->round_trip_max);
 
-	stat_per_period_pre->round_trip_count++;
-	stat_per_period_pre->round_trip_sum += rt_time;
-	stat_per_period_pre->round_trip_avg =
-		stat_per_period_pre->round_trip_sum / (double)stat_per_period_pre->round_trip_count;
+		stat_per_period_pre->round_trip_count++;
+		stat_per_period_pre->round_trip_sum += rt_time;
+		stat_per_period_pre->round_trip_avg = stat_per_period_pre->round_trip_sum /
+						      (double)stat_per_period_pre->round_trip_count;
+	}
+
+	stat_update_min_max(oneway_time, &stat_per_period_pre->oneway_min,
+			    &stat_per_period_pre->oneway_max);
+
+	if (stat_frame_type_is_real_time(frame_type) && oneway_time > rtt_expected_rt_limit / 2)
+		stat_per_period_pre->oneway_outliers++;
+	stat_per_period_pre->oneway_count++;
+	stat_per_period_pre->oneway_sum += rt_time;
+	stat_per_period_pre->oneway_avg =
+		stat_per_period_pre->oneway_sum / (double)stat_per_period_pre->oneway_count;
 
 	stat_per_period_pre->frames_received++;
 	stat_per_period_pre->out_of_order_errors += out_of_order;
@@ -189,6 +205,11 @@ static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint
 	 * preparation
 	 */
 	if (stat_per_period_pre->ready) {
+		if (log_stat_user_selected && LOG_STAT_RTT == false) {
+			stat_per_period_pre->round_trip_avg = 0;
+			stat_per_period_pre->round_trip_max = 0;
+			stat_per_period_pre->round_trip_min = 0;
+		}
 		log_via_mqtt_stats(frame_type, &global_statistics_rtt_per_period_prep[frame_type]);
 		stats_reset_stats(&global_statistics_rtt_per_period_prep[frame_type]);
 	}
@@ -207,7 +228,7 @@ void stat_frame_received(enum stat_frame_type frame_type, uint64_t cycle_number,
 	struct round_trip_context *rtt = &round_trip_contexts[frame_type];
 	struct statistics_rtt *stat = &global_statistics_rtt[frame_type];
 	struct timespec rx_time = {};
-	uint64_t rt_time, curr_time;
+	uint64_t rt_time, curr_time, oneway_time;
 
 	log_message(LOG_LEVEL_DEBUG, "%s: frame[%" PRIu64 "] received\n",
 		    stat_frame_type_to_string(frame_type), cycle_number);
@@ -216,18 +237,37 @@ void stat_frame_received(enum stat_frame_type frame_type, uint64_t cycle_number,
 	if (log_stat_user_selected && LOG_STAT_RTT) {
 		clock_gettime(app_config.application_clock_id, &rx_time);
 		curr_time = ts_to_ns(&rx_time);
-		rt_time = curr_time - rtt->backlog[cycle_number % rtt->backlog_len];
-		rt_time /= 1000;
 
-		stat_frame_received_per_period(frame_type, curr_time, rt_time, out_of_order,
-					       payload_mismatch, frame_id_mismatch);
+		if (log_stat_user_selected && LOG_STAT_RTT) {
+			rt_time = curr_time - rtt->backlog[cycle_number % rtt->backlog_len];
+			rt_time /= 1000;
 
-		stat_update_min_max(rt_time, &stat->round_trip_min, &stat->round_trip_max);
-		if (stat_frame_type_is_real_time(frame_type) && rt_time > rtt_expected_rt_limit)
-			stat->round_trip_outliers++;
-		stat->round_trip_count++;
-		stat->round_trip_sum += rt_time;
-		stat->round_trip_avg = stat->round_trip_sum / (double)stat->round_trip_count;
+			stat_update_min_max(rt_time, &stat->round_trip_min, &stat->round_trip_max);
+
+			if (stat_frame_type_is_real_time(frame_type) &&
+			    rt_time > rtt_expected_rt_limit)
+				stat->round_trip_outliers++;
+			stat->round_trip_count++;
+			stat->round_trip_sum += rt_time;
+			stat->round_trip_avg =
+				stat->round_trip_sum / (double)stat->round_trip_count;
+		} else {
+			rt_time = 0;
+		}
+
+		oneway_time = curr_time - tx_timestamp;
+
+		stat_update_min_max(oneway_time, &stat->oneway_min, &stat->oneway_max);
+
+		if (stat_frame_type_is_real_time(frame_type) &&
+		    oneway_time > rtt_expected_rt_limit / 2)
+			stat->oneway_outliers++;
+		stat->oneway_count++;
+		stat->oneway_sum += rt_time;
+		stat->oneway_avg = stat->oneway_sum / (double)stat->oneway_count;
+
+		stat_frame_received_per_period(frame_type, curr_time, rt_time, oneway_time,
+					       out_of_order, payload_mismatch, frame_id_mismatch);
 
 		/* Stop tracing after certain amount of time */
 		if (app_config.debug_stop_trace_on_rtt &&
