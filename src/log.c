@@ -115,10 +115,12 @@ static void log_add_traffic_class(const char *name, enum stat_frame_type frame_t
 
 	written = snprintf(*buffer, *length,
 			   "%sSent=%" PRIu64 " | %sReceived=%" PRIu64 " | %sRttMin=%" PRIu64
-			   " [us] | %sRttMax=%" PRIu64 " [us] | %sRttAvg=%lf [us] | ",
+			   " [us] | %sRttMax=%" PRIu64 " [us] | %sRttAvg=%lf [us] | %sOnewayMin=%" PRIu64
+			   " [us] | %sOnewayMax=%" PRIu64 " [us] | %sOnewayAvg=%lf [us] | ",
 			   name, stat->frames_sent, name, stat->frames_received, name,
 			   stat->round_trip_min, name, stat->round_trip_max, name,
-			   stat->round_trip_avg);
+			   stat->round_trip_avg, name, stat->oneway_min, name,
+			   stat->oneway_max, name, stat->oneway_avg);
 
 	*buffer += written;
 	*length -= written;
