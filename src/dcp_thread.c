@@ -248,6 +248,7 @@ static int dcp_rx_frame(void *data, unsigned char *frame_data, size_t len)
 	const bool ignore_rx_errors = app_config.dcp_ignore_rx_errors;
 	const size_t frame_length = app_config.dcp_frame_length;
 	bool out_of_order, payload_mismatch, frame_id_mismatch;
+	struct timespec tx_timespec_mirror = {};
 	unsigned char new_frame[MAX_FRAME_SIZE];
 	struct profinet_rt_header *rt;
 	uint64_t sequence_counter;
@@ -264,7 +265,10 @@ static int dcp_rx_frame(void *data, unsigned char *frame_data, size_t len)
 	 */
 	rt = (struct profinet_rt_header *)(frame_data + sizeof(struct ethhdr));
 	sequence_counter = meta_data_to_sequence_counter(&rt->meta_data, num_frames_per_cycle);
+
 	tx_timestamp = meta_data_to_tx_timestamp(&rt->meta_data);
+	clock_gettime(app_config.application_clock_id, &tx_timespec_mirror);
+	tx_timestamp_to_meta_data(&rt->meta_data, ts_to_ns(&tx_timespec_mirror));
 
 	out_of_order = sequence_counter != thread_context->rx_sequence_counter;
 	payload_mismatch = memcmp(frame_data + sizeof(struct ethhdr) + sizeof(*rt),

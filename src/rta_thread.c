@@ -382,6 +382,7 @@ static int rta_rx_frame(void *data, unsigned char *frame_data, size_t len)
 	struct profinet_rt_header *rt;
 	uint64_t sequence_counter;
 	uint64_t tx_timestamp;
+	struct timespec tx_timespec_mirror = {};
 	bool vlan_tag_missing;
 	void *p = frame_data;
 	struct ethhdr *eth;
@@ -418,6 +419,8 @@ static int rta_rx_frame(void *data, unsigned char *frame_data, size_t len)
 		return -EINVAL;
 	}
 
+	clock_gettime(app_config.application_clock_id, &tx_timespec_mirror);
+
 	/* Check cycle counter, frame id range and payload. */
 	if (app_config.rta_security_mode == SECURITY_MODE_NONE) {
 		rt = p;
@@ -428,6 +431,8 @@ static int rta_rx_frame(void *data, unsigned char *frame_data, size_t len)
 			meta_data_to_sequence_counter(&rt->meta_data, num_frames_per_cycle);
 
 		tx_timestamp = meta_data_to_tx_timestamp(&rt->meta_data);
+		tx_timestamp_to_meta_data(&rt->meta_data, ts_to_ns(&tx_timespec_mirror));
+
 	} else if (app_config.rta_security_mode == SECURITY_MODE_AO) {
 		unsigned char *begin_of_security_checksum;
 		unsigned char *begin_of_aad_data;
@@ -444,6 +449,7 @@ static int rta_rx_frame(void *data, unsigned char *frame_data, size_t len)
 			meta_data_to_sequence_counter(&srt->meta_data, num_frames_per_cycle);
 
 		tx_timestamp = meta_data_to_tx_timestamp(&srt->meta_data);
+
 
 		/* Authenticate received Profinet Frame */
 		size_of_eth_header = vlan_tag_missing ? sizeof(struct ethhdr)
@@ -463,6 +469,11 @@ static int rta_rx_frame(void *data, unsigned char *frame_data, size_t len)
 			log_message(LOG_LEVEL_WARNING,
 				    "RtaRx: frame[%" PRIu64 "] Not authentificated\n",
 				    sequence_counter);
+
+		tx_timestamp_to_meta_data(&srt->meta_data, ts_to_ns(&tx_timespec_mirror));
+		security_encrypt(security_context, NULL, 0, begin_of_aad_data,
+		        size_of_aad_data, (unsigned char *)&iv, NULL,
+		        begin_of_security_checksum);
 	} else {
 		unsigned char *begin_of_security_checksum;
 		unsigned char *begin_of_ciphertext;
@@ -480,6 +491,7 @@ static int rta_rx_frame(void *data, unsigned char *frame_data, size_t len)
 			meta_data_to_sequence_counter(&srt->meta_data, num_frames_per_cycle);
 
 		tx_timestamp = meta_data_to_tx_timestamp(&srt->meta_data);
+
 
 		/* Authenticate received Profinet Frame */
 		size_of_eth_header = vlan_tag_missing ? sizeof(struct ethhdr)
@@ -504,8 +516,16 @@ static int rta_rx_frame(void *data, unsigned char *frame_data, size_t len)
 				    "RtaRx: frame[%" PRIu64 "] Not authentificated and decrypted\n",
 				    sequence_counter);
 
+
+
 		/* plaintext points to the decrypted payload */
 		p = plaintext;
+
+		tx_timestamp_to_meta_data(&srt->meta_data, ts_to_ns(&tx_timespec_mirror));
+		security_encrypt(security_context, thread_context->payload_pattern,
+		        thread_context->payload_pattern_length, begin_of_aad_data,
+		        size_of_aad_data, (unsigned char *)&iv, NULL,
+		        begin_of_security_checksum);
 	}
 
 	out_of_order = sequence_counter != thread_context->rx_sequence_counter;
