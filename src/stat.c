@@ -39,7 +39,6 @@ const char *stat_frame_type_names[NUM_FRAME_TYPES] = {
 
 int stat_init(enum log_stat_options log_selection)
 {
-
 	if (log_selection >= LOG_NUM_OPTIONS)
 		return -EINVAL;
 
