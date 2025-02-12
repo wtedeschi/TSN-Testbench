@@ -448,7 +448,7 @@ int create_rta_socket(void)
 	socket_fd = create_raw_socket(app_config.classes[RTA_FRAME_TYPE].interface,
 				      app_config.classes[RTA_FRAME_TYPE].socket_priority);
 	if (socket_fd < 0) {
-		fprintf(stderr, "Failed to create RAW socket for Profinet RTC Frames!\n");
+		fprintf(stderr, "Failed to create RAW socket for Profinet RTA Frames!\n");
 		return socket_fd;
 	}
 
