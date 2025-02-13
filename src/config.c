@@ -389,7 +389,7 @@ int config_read_from_file(const char *config_file)
 			CONFIG_STORE_INT_PARAM_CLASS(GenericL2TxThreadCpu, tx_thread_cpu);
 			CONFIG_STORE_INT_PARAM_CLASS(GenericL2RxThreadCpu, rx_thread_cpu);
 			CONFIG_STORE_INTERFACE_PARAM_CLASS(GenericL2Interface, interface);
-			CONFIG_STORE_MAC_PARAM_CLASS(GenericL2Destination, l3_destination);
+			CONFIG_STORE_MAC_PARAM_CLASS(GenericL2Destination, l2_destination);
 
 			CONFIG_STORE_INT_PARAM(LogThreadPriority, log_thread_priority);
 			CONFIG_STORE_INT_PARAM(LogThreadCpu, log_thread_cpu);
