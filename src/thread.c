@@ -129,6 +129,8 @@ static struct thread_context *find_next_pn_thread(struct thread_context *pn_thre
 
 int link_pn_threads(struct thread_context *pn_threads)
 {
+	struct thread_context *t, *p;
+
 	/*
 	 * The Profinet traffic classes have a dedicated order:
 	 *   TSN -> RTC -> RTA -> DCP -> LLDP -> UDP
@@ -149,14 +151,24 @@ int link_pn_threads(struct thread_context *pn_threads)
 	 *
 	 * GenericL2 has nothing todo with Profinet.
 	 */
-	if (config_is_traffic_class_active("TsnHigh"))
+	if (config_is_traffic_class_active("TsnHigh")) {
 		pn_threads[TSN_HIGH_THREAD].is_first = true;
-	else if (config_is_traffic_class_active("Rtc"))
+		t = &pn_threads[TSN_HIGH_THREAD];
+	} else if (config_is_traffic_class_active("Rtc")) {
 		pn_threads[RTC_THREAD].is_first = true;
-	else if (config_is_traffic_class_active("GenericL2"))
+		t = &pn_threads[RTC_THREAD];
+	} else if (config_is_traffic_class_active("GenericL2")) {
 		return 0;
-	else
+	} else {
 		return -EINVAL;
+	}
+
+	/* Find last PN thread. */
+	while (t) {
+		p = t;
+		t = t->next;
+	}
+	p->is_last = true;
 
 	return 0;
 }

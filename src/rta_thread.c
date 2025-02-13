@@ -255,6 +255,9 @@ static void *rta_tx_thread_routine(void *data)
 			pthread_cond_signal(&thread_context->next->data_cond_var);
 			pthread_mutex_unlock(&thread_context->next->data_mutex);
 		}
+
+		if (thread_context->is_last)
+			stat_update();
 	}
 
 	return NULL;
@@ -370,6 +373,9 @@ static void *rta_xdp_tx_thread_routine(void *data)
 			pthread_cond_signal(&thread_context->next->data_cond_var);
 			pthread_mutex_unlock(&thread_context->next->data_mutex);
 		}
+
+		if (thread_context->is_last)
+			stat_update();
 	}
 
 	return NULL;

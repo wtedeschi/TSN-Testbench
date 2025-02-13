@@ -280,6 +280,8 @@ static void *generic_l2_tx_thread_routine(void *data)
 					       socket_fd, &destination, ts_to_ns(&wakeup_time),
 					       duration);
 		}
+
+		stat_update();
 	}
 
 	return NULL;
@@ -369,6 +371,8 @@ static void *generic_l2_xdp_tx_thread_routine(void *data)
 
 			pthread_mutex_unlock(&thread_context->xdp_data_mutex);
 		}
+
+		stat_update();
 	}
 
 	return NULL;
