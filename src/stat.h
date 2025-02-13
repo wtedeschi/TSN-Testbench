@@ -51,8 +51,7 @@ static inline const char *stat_frame_type_to_string(enum stat_frame_type frame_t
 }
 
 struct statistics {
-	uint64_t first_time_stamp;
-	uint64_t last_time_stamp;
+	uint64_t time_stamp;
 	uint64_t frames_sent;
 	uint64_t frames_received;
 	uint64_t out_of_order_errors;
@@ -70,10 +69,7 @@ struct statistics {
 	uint64_t oneway_outliers;
 	double oneway_sum;
 	double oneway_avg;
-	bool ready;
 };
-
-extern struct statistics global_statistics[NUM_FRAME_TYPES];
 
 struct round_trip_context {
 	int64_t *backlog;
@@ -86,5 +82,8 @@ const char *stat_frame_type_to_string(enum stat_frame_type frame_type);
 void stat_frame_sent(enum stat_frame_type frame_type, uint64_t cycle_number);
 void stat_frame_received(enum stat_frame_type frame_type, uint64_t cycle_number, bool out_of_order,
 			 bool payload_mismatch, bool frame_id_mismatch, uint64_t tx_timestamp);
+void stat_update(void);
+void stat_get_global_stats(struct statistics *stats, size_t len);
+void stat_get_stats_per_period(struct statistics *stats, size_t len);
 
 #endif /* _STAT_H_ */

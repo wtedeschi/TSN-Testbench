@@ -17,6 +17,7 @@
 #include "thread.h"
 #include "utils.h"
 
+static struct statistics global_statistics[NUM_FRAME_TYPES];
 static struct ring_buffer *global_log_ring_buffer;
 static enum log_level current_log_level;
 static FILE *file_tracing_on;
@@ -162,6 +163,9 @@ static void *log_thread_routine(void *data)
 			pthread_error(ret, "clock_nanosleep() failed");
 			return NULL;
 		}
+
+		/* Get latest statistics data */
+		stat_get_global_stats(global_statistics, sizeof(global_statistics));
 
 		/* Log statistics once per logging period. */
 		p = stat_message;

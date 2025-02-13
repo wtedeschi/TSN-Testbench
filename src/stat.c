@@ -17,10 +17,29 @@
 #include "log.h"
 #include "logviamqtt.h"
 #include "stat.h"
+#include "thread.h"
 #include "utils.h"
 
-struct statistics global_statistics[NUM_FRAME_TYPES];
+/*
+ * This is used by all real time Tx and Rx threads. However, all threads have their own portion
+ * within that struct so that it can be accessed without taking any locks. That is a must, because
+ * Tx and Rx are hot paths and we do not want to wait for logging or such.
+ */
+static struct statistics global_statistics[NUM_FRAME_TYPES];
+
+/*
+ * Once per stat collection interval the global_statistics are copied to global_statistics_for_log
+ * for the log threads. That is used for file Log at the moment.
+ */
+static struct statistics global_statistics_for_log[NUM_FRAME_TYPES];
+static pthread_mutex_t global_statistics_mutex;
+
+/*
+ * These structs contains only the statistics for current stat interval. This is used by MQTT.
+ */
 static struct statistics statistics_per_period[NUM_FRAME_TYPES];
+static struct statistics statistics_per_period_for_log[NUM_FRAME_TYPES];
+
 static struct round_trip_context round_trip_contexts[NUM_FRAME_TYPES];
 static uint64_t rtt_expected_rt_limit;
 static int log_stat_user_selected;
@@ -51,6 +70,8 @@ int stat_init(enum log_stat_options log_selection)
 
 	if (log_selection >= LOG_NUM_OPTIONS)
 		return -EINVAL;
+
+	init_mutex(&global_statistics_mutex);
 
 	if (log_selection == LOG_REFERENCE) {
 		bool allocation_error = false;
@@ -131,6 +152,66 @@ void stat_free(void)
 	}
 }
 
+/*
+ * This function will be called once per cycle after all Tx threads have been finished. At this
+ * point in time no one touches global_statistics, because all networking is done.
+ *
+ * It copies all *statistics to *statistics_for_log.
+ */
+void stat_update(void)
+{
+	static uint64_t last_ts = 0;
+	uint64_t elapsed, curr_time;
+	bool proceed = false;
+	struct timespec now;
+
+	clock_gettime(app_config.application_clock_id, &now);
+	curr_time = ts_to_ns(&now);
+
+	if (!last_ts)
+		last_ts = curr_time;
+
+	elapsed = curr_time - last_ts;
+	if (elapsed >= app_config.stats_collection_interval_ns) {
+		proceed = true;
+		last_ts = curr_time;
+	}
+
+	if (!proceed)
+		return;
+
+	/* Update stats for logging facilities. */
+	pthread_mutex_lock(&global_statistics_mutex);
+	memcpy(&global_statistics_for_log, &global_statistics, sizeof(global_statistics));
+#if defined(WITH_MQTT)
+	memcpy(&statistics_per_period_for_log, &statistics_per_period,
+	       sizeof(statistics_per_period));
+	for (int i = 0; i < NUM_FRAME_TYPES; i++)
+		stat_reset(&statistics_per_period[i]);
+#endif
+	pthread_mutex_unlock(&global_statistics_mutex);
+}
+
+void stat_get_global_stats(struct statistics *stats, size_t len)
+{
+	if (len < sizeof(global_statistics_for_log))
+		return;
+
+	pthread_mutex_lock(&global_statistics_mutex);
+	memcpy(stats, &global_statistics_for_log, sizeof(global_statistics_for_log));
+	pthread_mutex_unlock(&global_statistics_mutex);
+}
+
+void stat_get_stats_per_period(struct statistics *stats, size_t len)
+{
+	if (len < sizeof(statistics_per_period_for_log))
+		return;
+
+	pthread_mutex_lock(&global_statistics_mutex);
+	memcpy(stats, &statistics_per_period_for_log, sizeof(statistics_per_period_for_log));
+	pthread_mutex_unlock(&global_statistics_mutex);
+}
+
 static inline void stat_update_min_max(uint64_t new_value, uint64_t *min, uint64_t *max)
 {
 	*max = (new_value > *max) ? new_value : *max;
@@ -181,29 +262,10 @@ static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint
 					   bool frame_id_mismatch)
 {
 	struct statistics *stat_per_period = &statistics_per_period[frame_type];
-	uint64_t elapsed;
 
-	if (stat_per_period->first_time_stamp == 0)
-		stat_per_period->first_time_stamp = curr_time;
-
-	/*
-	 * Test if the amount of time specified in the config is arrived. If true this will be the
-	 * last point to be taken into stats per period.
-	 */
-	elapsed = curr_time - stat_per_period->first_time_stamp;
-	if (elapsed >= app_config.stats_collection_interval_ns) {
-		stat_per_period->ready = true;
-		stat_per_period->last_time_stamp = curr_time;
-	}
-
+	stat_per_period->time_stamp = curr_time;
 	stat_frame_received_common(stat_per_period, frame_type, rt_time, oneway_time, out_of_order,
 				   payload_mismatch, frame_id_mismatch);
-
-	/* Copy stats for MQTT module. */
-	if (stat_per_period->ready) {
-		log_via_mqtt_stats(frame_type, &statistics_per_period[frame_type]);
-		stat_reset(&statistics_per_period[frame_type]);
-	}
 }
 
 static void stat_frame_sent_per_period(enum stat_frame_type frame_type)
