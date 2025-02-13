@@ -54,8 +54,8 @@ TSNLow:
   TsnLowRxQueue: 1
   TsnLowTxQueue: 1
   TsnLowSocketPriority: 6
-  TsnLowTxThreadPriority: 98
-  TsnLowRxThreadPriority: 98
+  TsnLowTxThreadPriority: 97
+  TsnLowRxThreadPriority: 97
   TsnLowTxThreadCpu: 0
   TsnLowRxThreadCpu: 0
   TsnLowInterface: enp88s0
@@ -75,15 +75,15 @@ RTC:
   RtcRxQueue: 2
   RtcTxQueue: 2
   RtcSocketPriority: 5
-  RtcTxThreadPriority: 98
-  RtcRxThreadPriority: 98
+  RtcTxThreadPriority: 96
+  RtcRxThreadPriority: 96
   RtcTxThreadCpu: 0
   RtcRxThreadCpu: 0
   RtcInterface: enp88s0
   RtcDestination: 48:21:0b:26:3f:42
 RTA:
   RtaEnabled: true
-  RtaXdpEnabled: false
+  RtaXdpEnabled: true
   RtaXdpSkbMode: false
   RtaXdpZcMode: false
   RtaXdpWakeupMode: true
@@ -97,8 +97,8 @@ RTA:
   RtaRxQueue: 3
   RtaTxQueue: 3
   RtaSocketPriority: 4
-  RtaTxThreadPriority: 97
-  RtaRxThreadPriority: 97
+  RtaTxThreadPriority: 95
+  RtaRxThreadPriority: 95
   RtaTxThreadCpu: 1
   RtaRxThreadCpu: 1
   RtaInterface: enp88s0
@@ -109,7 +109,7 @@ Stats:
   StatsHistogramMaximumNS: 10000000
   StatsHistogramFile: histogram.txt
 Log:
-  LogThreadPeriodNS: 500000000
+  LogThreadPeriodNS: 1000000000
   LogThreadPriority: 1
   LogThreadCpu: 1
   LogFile: mirror_vid100.log
