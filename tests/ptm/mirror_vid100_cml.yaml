@@ -170,7 +170,6 @@ UDPLow:
   UdpLowDestination: 192.168.1.1
   UdpLowSource: 192.168.1.2
 Log:
-  LogThreadPeriodNS: 500000000
   LogThreadPriority: 1
   LogThreadCpu: 7
   LogFile: /var/log/mirror_vid100.log

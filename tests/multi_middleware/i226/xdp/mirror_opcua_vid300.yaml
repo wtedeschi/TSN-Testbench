@@ -40,7 +40,6 @@ GenericL2:
   GenericL2Interface: enp3s0
   GenericL2Destination: a8:74:1d:9d:36:14
 Log:
-  LogThreadPeriodNS: 500000000
   LogThreadPriority: 1
   LogThreadCpu: 1
   LogFile: /var/log/mirror_opcua_vid300.log

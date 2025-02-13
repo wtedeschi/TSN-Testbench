@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (C) 2020-2023 Linutronix GmbH
+ * Copyright (C) 2020-2025 Linutronix GmbH
  * Author Kurt Kanzenbach <kurt@linutronix.de>
  */
 #include <errno.h>
@@ -138,7 +138,7 @@ static void log_add_traffic_class(const char *name, enum stat_frame_type frame_t
 static void *log_thread_routine(void *data)
 {
 	struct log_thread_context *log_context = data;
-	uint64_t period = app_config.log_thread_period_ns;
+	uint64_t period = app_config.stats_collection_interval_ns;
 	struct timespec time;
 	int ret;
 

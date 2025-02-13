@@ -35,7 +35,6 @@ TSNHigh:
   TsnHighInterface: enp0s29f2
   TsnHighDestination: 4e:e4:85:53:c8:78
 Log:
-  LogThreadPeriodNS: 500000000
   LogThreadPriority: 1
   LogThreadCpu: 1
   LogFile: /var/log/reference_vid100.log

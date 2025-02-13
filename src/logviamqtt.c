@@ -2,6 +2,8 @@
 /*
  * Copyright (C) 2024 Intel Corporation.
  * Author Walfred Tedeschi <walfred.tedeschi@intel.com>
+ * Copyright (C) 2025 Linutronix GmbH
+ * Author Kurt Kanzenbach <kurt@linutronix.de>
  */
 
 #include <errno.h>
@@ -118,7 +120,7 @@ static void log_via_mqtt_on_connect(struct mosquitto *mosq, void *obj, int reaso
 
 static void *log_via_mqtt_thread_routine(void *data)
 {
-	uint64_t period_ns = app_config.log_via_mqtt_thread_period_ns;
+	uint64_t period_ns = app_config.stats_collection_interval_ns;
 	struct log_via_mqtt_thread_context *mqtt_context = data;
 	int ret, connect_status;
 	struct timespec time;

@@ -40,7 +40,6 @@ GenericL2:
   GenericL2Interface: enp0s29f2
   GenericL2Destination: 4e:e4:85:53:c8:79
 Log:
-  LogThreadPeriodNS: 500000000
   LogThreadPriority: 1
   LogThreadCpu: 1
   LogFile: /var/log/mirror_avtp_vid400.log

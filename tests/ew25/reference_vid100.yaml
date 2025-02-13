@@ -109,7 +109,6 @@ Stats:
   StatsHistogramMaximumNS: 10000000
   StatsHistogramFile: histogram.txt
 Log:
-  LogThreadPeriodNS: 1000000000
   LogThreadPriority: 1
   LogThreadCpu: 1
   LogFile: reference_vid100.log

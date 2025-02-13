@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 /*
- * Copyright (C) 2020-2024 Linutronix GmbH
+ * Copyright (C) 2020-2025 Linutronix GmbH
  * Author Kurt Kanzenbach <kurt@linutronix.de>
  */
 
@@ -90,7 +90,6 @@ struct application_config {
 	/* Traffic class configurations */
 	struct traffic_class_config classes[NUM_FRAME_TYPES];
 	/* Logging */
-	uint64_t log_thread_period_ns;
 	int log_thread_priority;
 	int log_thread_cpu;
 	char *log_file;
@@ -113,7 +112,6 @@ struct application_config {
 	bool log_via_mqtt;
 	int log_via_mqtt_thread_priority;
 	int log_via_mqtt_thread_cpu;
-	uint64_t log_via_mqtt_thread_period_ns;
 	size_t log_via_mqtt_broker_ip_length;
 	char *log_via_mqtt_broker_ip;
 	int log_via_mqtt_broker_port;

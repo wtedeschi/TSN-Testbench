@@ -37,7 +37,6 @@ RTC:
   RtcInterface: enp2s0
   RtcDestination: 00:a0:ca:00:00:00
 Log:
-  LogThreadPeriodNS: 500000000
   LogThreadPriority: 1
   LogThreadCpu: 0
   LogFile: /var/log/reference_vid100.log

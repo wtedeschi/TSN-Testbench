@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (C) 2020-2024 Linutronix GmbH
+ * Copyright (C) 2020-2025 Linutronix GmbH
  * Author Kurt Kanzenbach <kurt@linutronix.de>
  */
 
@@ -391,7 +391,6 @@ int config_read_from_file(const char *config_file)
 			CONFIG_STORE_INTERFACE_PARAM_CLASS(GenericL2Interface, interface);
 			CONFIG_STORE_MAC_PARAM_CLASS(GenericL2Destination, l3_destination);
 
-			CONFIG_STORE_ULONG_PARAM(LogThreadPeriodNS, log_thread_period_ns);
 			CONFIG_STORE_INT_PARAM(LogThreadPriority, log_thread_priority);
 			CONFIG_STORE_INT_PARAM(LogThreadCpu, log_thread_cpu);
 			CONFIG_STORE_STRING_PARAM(LogFile, log_file);
@@ -416,8 +415,6 @@ int config_read_from_file(const char *config_file)
 			CONFIG_STORE_INT_PARAM(LogViaMQTTThreadPriority,
 					       log_via_mqtt_thread_priority);
 			CONFIG_STORE_INT_PARAM(LogViaMQTTThreadCpu, log_via_mqtt_thread_cpu);
-			CONFIG_STORE_ULONG_PARAM(LogViaMQTTThreadPeriodNS,
-						 log_via_mqtt_thread_period_ns);
 			CONFIG_STORE_STRING_PARAM(LogViaMQTTBrokerIP, log_via_mqtt_broker_ip);
 			CONFIG_STORE_INT_PARAM(LogViaMQTTBrokerPort, log_via_mqtt_broker_port);
 			CONFIG_STORE_INT_PARAM(LogViaMQTTKeepAliveSecs,
@@ -760,7 +757,6 @@ void config_print_values(void)
 	printf("--------------------------------------------------------------------------------"
 	       "\n");
 
-	printf("LogThreadPeriodNS=%" PRIu64 "\n", app_config.log_thread_period_ns);
 	printf("LogThreadPriority=%d\n", app_config.log_thread_priority);
 	printf("LogThreadCpu=%d\n", app_config.log_thread_cpu);
 	printf("LogFile=%s\n", app_config.log_file);
@@ -790,7 +786,6 @@ void config_print_values(void)
 	printf("LogViaMQTT=%s\n", app_config.log_via_mqtt ? "True" : "False");
 	printf("LogViaMQTTThreadPriority=%d\n", app_config.log_via_mqtt_thread_priority);
 	printf("LogViaMQTTThreadCpu=%d\n", app_config.log_via_mqtt_thread_cpu);
-	printf("LogViaMQTTThreadPeriodNS=%" PRIu64 "\n", app_config.log_via_mqtt_thread_period_ns);
 	printf("LogViaMQTTBrokerIP=%s\n", app_config.log_via_mqtt_broker_ip);
 	printf("LogViaMQTTBrokerPort=%d\n", app_config.log_via_mqtt_broker_port);
 	printf("LogViaMQTTKeepAliveSecs=%d\n", app_config.log_via_mqtt_keep_alive_secs);
@@ -1102,7 +1097,6 @@ int config_set_defaults(bool mirror_enabled)
 	memcpy((void *)conf->l2_destination, default_destination, ETH_ALEN);
 
 	/* Logging */
-	app_config.log_thread_period_ns = 500000000;
 	app_config.log_thread_priority = 1;
 	app_config.log_thread_cpu = 7;
 	app_config.log_file = strdup("reference.log");
@@ -1135,7 +1129,6 @@ int config_set_defaults(bool mirror_enabled)
 	app_config.log_via_mqtt_thread_priority = 1;
 	app_config.log_via_mqtt_thread_cpu = 7;
 	app_config.log_via_mqtt_keep_alive_secs = 60;
-	app_config.log_via_mqtt_thread_period_ns = 1e9;
 	app_config.log_via_mqtt_broker_ip = strdup(default_log_via_mqtt_broker_ip);
 	if (!app_config.log_via_mqtt_broker_ip)
 		goto out;
