@@ -155,6 +155,7 @@ static void *log_thread_routine(void *data)
 	while (!log_context->stop) {
 		size_t log_data_len, stat_message_length;
 		char stat_message[4096] = {}, *p;
+		int i;
 
 		/* Wait until next period */
 		increment_period(&time, period);
@@ -171,29 +172,16 @@ static void *log_thread_routine(void *data)
 		p = stat_message;
 		stat_message_length = sizeof(stat_message) - 1;
 
-		if (config_is_traffic_class_active("TsnHigh"))
-			log_add_traffic_class("TsnHigh", TSN_HIGH_FRAME_TYPE, &p,
-					      &stat_message_length);
-		if (config_is_traffic_class_active("TsnLow"))
-			log_add_traffic_class("TsnLow", TSN_LOW_FRAME_TYPE, &p,
-					      &stat_message_length);
-		if (config_is_traffic_class_active("Rtc"))
-			log_add_traffic_class("Rtc", RTC_FRAME_TYPE, &p, &stat_message_length);
-		if (config_is_traffic_class_active("Rta"))
-			log_add_traffic_class("Rta", RTA_FRAME_TYPE, &p, &stat_message_length);
-		if (config_is_traffic_class_active("Dcp"))
-			log_add_traffic_class("Dcp", DCP_FRAME_TYPE, &p, &stat_message_length);
-		if (config_is_traffic_class_active("Lldp"))
-			log_add_traffic_class("Lldp", LLDP_FRAME_TYPE, &p, &stat_message_length);
-		if (config_is_traffic_class_active("UdpHigh"))
-			log_add_traffic_class("UdpHigh", UDP_HIGH_FRAME_TYPE, &p,
-					      &stat_message_length);
-		if (config_is_traffic_class_active("UdpLow"))
-			log_add_traffic_class("UdpLow", UDP_LOW_FRAME_TYPE, &p,
-					      &stat_message_length);
-		if (config_is_traffic_class_active("GenericL2"))
-			log_add_traffic_class(app_config.classes[GENERICL2_FRAME_TYPE].name,
-					      GENERICL2_FRAME_TYPE, &p, &stat_message_length);
+		for (i = 0; i < NUM_FRAME_TYPES; i++) {
+			if (config_is_traffic_class_active(stat_frame_type_to_string(i))) {
+				const char *name =
+					i == GENERICL2_FRAME_TYPE
+						? app_config.classes[GENERICL2_FRAME_TYPE].name
+						: stat_frame_type_to_string(i);
+
+				log_add_traffic_class(name, i, &p, &stat_message_length);
+			}
+		}
 
 		log_message(LOG_LEVEL_INFO, "%s\n", stat_message);
 
