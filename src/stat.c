@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (C) 2021-2024 Linutronix GmbH
+ * Copyright (C) 2021-2025 Linutronix GmbH
  * Author Kurt Kanzenbach <kurt@linutronix.de>
  */
 
@@ -76,32 +76,11 @@ int stat_init(enum log_stat_options log_selection)
 	if (log_selection == LOG_REFERENCE) {
 		bool allocation_error = false;
 
-		round_trip_contexts[TSN_HIGH_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG *
-			app_config.classes[TSN_HIGH_FRAME_TYPE].num_frames_per_cycle;
-		round_trip_contexts[TSN_LOW_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG *
-			app_config.classes[TSN_LOW_FRAME_TYPE].num_frames_per_cycle;
-		round_trip_contexts[RTC_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.classes[RTC_FRAME_TYPE].num_frames_per_cycle;
-		round_trip_contexts[RTA_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.classes[RTA_FRAME_TYPE].num_frames_per_cycle;
-		round_trip_contexts[DCP_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.classes[DCP_FRAME_TYPE].num_frames_per_cycle;
-		round_trip_contexts[LLDP_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.classes[LLDP_FRAME_TYPE].num_frames_per_cycle;
-		round_trip_contexts[UDP_HIGH_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG *
-			app_config.classes[UDP_HIGH_FRAME_TYPE].num_frames_per_cycle;
-		round_trip_contexts[UDP_LOW_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG *
-			app_config.classes[UDP_LOW_FRAME_TYPE].num_frames_per_cycle;
-		round_trip_contexts[GENERICL2_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG *
-			app_config.classes[GENERICL2_FRAME_TYPE].num_frames_per_cycle;
-
 		for (i = 0; i < NUM_FRAME_TYPES; i++) {
 			struct round_trip_context *current_context = &round_trip_contexts[i];
+
+			current_context->backlog_len =
+				STAT_MAX_BACKLOG * app_config.classes[i].num_frames_per_cycle;
 
 			current_context->backlog =
 				calloc(current_context->backlog_len, sizeof(int64_t));
