@@ -6,8 +6,8 @@
 .. Testbench documentation master file.
 ..
 
-Welcome to Linux TSN Testbench's documentation!
-===============================================
+Welcome to Linux RealTime Communication Testbench's documentation!
+==================================================================
 
 .. toctree::
    :maxdepth: 2
@@ -51,7 +51,17 @@ Welcome to Linux TSN Testbench's documentation!
 .. toctree::
    :maxdepth: 2
 
+   histogram.rst
+
+.. toctree::
+   :maxdepth: 2
+
    test.rst
+
+.. toctree::
+   :maxdepth: 2
+
+   wireshark.rst
 
 .. toctree::
    :maxdepth: 2

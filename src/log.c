@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (C) 2020-2023 Linutronix GmbH
+ * Copyright (C) 2020-2025 Linutronix GmbH
  * Author Kurt Kanzenbach <kurt@linutronix.de>
  */
 #include <errno.h>
@@ -17,6 +17,7 @@
 #include "thread.h"
 #include "utils.h"
 
+static struct statistics global_statistics[NUM_FRAME_TYPES];
 static struct ring_buffer *global_log_ring_buffer;
 static enum log_level current_log_level;
 static FILE *file_tracing_on;
@@ -137,7 +138,7 @@ static void log_add_traffic_class(const char *name, enum stat_frame_type frame_t
 static void *log_thread_routine(void *data)
 {
 	struct log_thread_context *log_context = data;
-	uint64_t period = app_config.log_thread_period_ns;
+	uint64_t period = app_config.stats_collection_interval_ns;
 	struct timespec time;
 	int ret;
 
@@ -154,6 +155,7 @@ static void *log_thread_routine(void *data)
 	while (!log_context->stop) {
 		size_t log_data_len, stat_message_length;
 		char stat_message[4096] = {}, *p;
+		int i;
 
 		/* Wait until next period */
 		increment_period(&time, period);
@@ -163,33 +165,23 @@ static void *log_thread_routine(void *data)
 			return NULL;
 		}
 
+		/* Get latest statistics data */
+		stat_get_global_stats(global_statistics, sizeof(global_statistics));
+
 		/* Log statistics once per logging period. */
 		p = stat_message;
 		stat_message_length = sizeof(stat_message) - 1;
 
-		if (CONFIG_IS_TRAFFIC_CLASS_ACTIVE(tsn_high))
-			log_add_traffic_class("TsnHigh", TSN_HIGH_FRAME_TYPE, &p,
-					      &stat_message_length);
-		if (CONFIG_IS_TRAFFIC_CLASS_ACTIVE(tsn_low))
-			log_add_traffic_class("TsnLow", TSN_LOW_FRAME_TYPE, &p,
-					      &stat_message_length);
-		if (CONFIG_IS_TRAFFIC_CLASS_ACTIVE(rtc))
-			log_add_traffic_class("Rtc", RTC_FRAME_TYPE, &p, &stat_message_length);
-		if (CONFIG_IS_TRAFFIC_CLASS_ACTIVE(rta))
-			log_add_traffic_class("Rta", RTA_FRAME_TYPE, &p, &stat_message_length);
-		if (CONFIG_IS_TRAFFIC_CLASS_ACTIVE(dcp))
-			log_add_traffic_class("Dcp", DCP_FRAME_TYPE, &p, &stat_message_length);
-		if (CONFIG_IS_TRAFFIC_CLASS_ACTIVE(lldp))
-			log_add_traffic_class("Lldp", LLDP_FRAME_TYPE, &p, &stat_message_length);
-		if (CONFIG_IS_TRAFFIC_CLASS_ACTIVE(udp_high))
-			log_add_traffic_class("UdpHigh", UDP_HIGH_FRAME_TYPE, &p,
-					      &stat_message_length);
-		if (CONFIG_IS_TRAFFIC_CLASS_ACTIVE(udp_low))
-			log_add_traffic_class("UdpLow", UDP_LOW_FRAME_TYPE, &p,
-					      &stat_message_length);
-		if (CONFIG_IS_TRAFFIC_CLASS_ACTIVE(generic_l2))
-			log_add_traffic_class(app_config.generic_l2_name, GENERICL2_FRAME_TYPE, &p,
-					      &stat_message_length);
+		for (i = 0; i < NUM_FRAME_TYPES; i++) {
+			if (config_is_traffic_class_active(stat_frame_type_to_string(i))) {
+				const char *name =
+					i == GENERICL2_FRAME_TYPE
+						? app_config.classes[GENERICL2_FRAME_TYPE].name
+						: stat_frame_type_to_string(i);
+
+				log_add_traffic_class(name, i, &p, &stat_message_length);
+			}
+		}
 
 		log_message(LOG_LEVEL_INFO, "%s\n", stat_message);
 

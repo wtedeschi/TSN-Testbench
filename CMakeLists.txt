@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
-# Copyright (C) 2020-2024 Linutronix GmbH
+# Copyright (C) 2020-2025 Linutronix GmbH
 # Author Kurt Kanzenbach <kurt@linutronix.de>
 #
 
 cmake_minimum_required(VERSION 3.5)
 project(profinet-eval)
 
-set(VERSION "4.0")
+set(VERSION "5.2")
 
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
@@ -52,7 +52,8 @@ add_executable(reference
   src/xdp.c
   src/tx_time.c
   src/security.c
-  src/packet.c)
+  src/packet.c
+  src/hist.c)
 add_executable(mirror
   src/mirror.c
   src/config.c
@@ -73,7 +74,8 @@ add_executable(mirror
   src/xdp.c
   src/tx_time.c
   src/security.c
-  src/packet.c)
+  src/packet.c
+  src/hist.c)
 
 option(WITH_MQTT, "Enable/Disable logging via MQTT" OFF)
 if (WITH_MQTT)
@@ -109,7 +111,7 @@ target_include_directories(mirror PUBLIC ${LIBBPF_INCLUDE_DIRS})
 target_include_directories(mirror PUBLIC ${LIBXDP_INCLUDE_DIRS})
 target_include_directories(mirror PUBLIC ${LIBCRYPTO_INCLUDE_DIRS})
 
-set(INSTALL_EBPF_DIR ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATAROOTDIR}/testbench/ebpf)
+set(INSTALL_EBPF_DIR ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/rtc-testbench/ebpf)
 configure_file(
   "${PROJECT_SOURCE_DIR}/app_config.in"
   "${PROJECT_BINARY_DIR}/app_config.h"
@@ -119,9 +121,7 @@ include_directories("${PROJECT_BINARY_DIR}")
 #
 # Add code for compiling XDP eBPF programes.
 #
-execute_process(COMMAND uname -m OUTPUT_VARIABLE BUILD_ARCH ERROR_QUIET)
-string(STRIP "${BUILD_ARCH}" BUILD_ARCH)
-set(ASM_INCLUDE "/usr/include/${BUILD_ARCH}-linux-gnu")
+set(ASM_INCLUDE "/usr/include/${CMAKE_C_LIBRARY_ARCHITECTURE}")
 set(CLANG_FLAGS -S --target=bpf -D __BPF_TRACING__ -Wall -O2 -fno-stack-protector -emit-llvm -g -I ${ASM_INCLUDE})
 set(LLC_FLAGS -march=bpf -filetype=obj)
 
@@ -140,7 +140,7 @@ function(add_xdp_prog name)
     SOURCES src/${name}.c
   )
 
-  install(FILES ${CMAKE_BINARY_DIR}/${name}.o DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/testbench/ebpf)
+  install(FILES ${CMAKE_BINARY_DIR}/${name}.o DESTINATION ${CMAKE_INSTALL_LIBDIR}/rtc-testbench/ebpf)
 endfunction()
 
 add_xdp_prog(xdp_kern_profinet_vid100)
@@ -152,4 +152,4 @@ add_xdp_prog(xdp_kern_avtp_vid400)
 
 install(TARGETS reference DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT binaries)
 install(TARGETS mirror DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT binaries)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/tests/ DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/testbench/tests)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/tests/ DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/rtc-testbench/tests)

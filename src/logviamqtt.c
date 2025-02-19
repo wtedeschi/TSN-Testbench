@@ -2,6 +2,8 @@
 /*
  * Copyright (C) 2024 Intel Corporation.
  * Author Walfred Tedeschi <walfred.tedeschi@intel.com>
+ * Copyright (C) 2025 Linutronix GmbH
+ * Author Kurt Kanzenbach <kurt@linutronix.de>
  */
 
 #include <errno.h>
@@ -40,73 +42,21 @@ void log_via_mqtt_thread_free(struct log_via_mqtt_thread_context *thread_context
 {
 }
 
-void log_via_mqtt_stats(enum stat_frame_type frame_type, struct statistics *stats)
-{
-}
-
 void log_via_mqtt_free(void)
 {
 }
 
 #else
 
-static struct ring_buffer *log_via_mqtt_global_log_ring_buffer;
-
-struct log_statistics {
-	enum stat_frame_type frame_type;
-	uint64_t time_stamp;
-	uint64_t frames_sent;
-	uint64_t frames_received;
-	uint64_t out_of_order_errors;
-	uint64_t frame_id_errors;
-	uint64_t payload_errors;
-	uint64_t round_trip_min;
-	uint64_t round_trip_max;
-	uint64_t round_trip_outliers;
-	uint64_t oneway_min;
-	uint64_t oneway_max;
-	uint64_t oneway_outliers;
-	double round_trip_avg;
-	double oneway_avg;
-};
+static struct statistics statistics_per_period[NUM_FRAME_TYPES];
 
 int log_via_mqtt_init(void)
 {
-	log_via_mqtt_global_log_ring_buffer = ring_buffer_allocate(LOGVIAMQTT_BUFFER_SIZE);
-	if (!log_via_mqtt_global_log_ring_buffer)
-		return -ENOMEM;
-
 	return 0;
 }
 
-void log_via_mqtt_stats(enum stat_frame_type frame_type, struct statistics *stats)
-{
-	struct log_statistics internal;
-
-	internal.frame_type = frame_type;
-	internal.time_stamp = stats->last_time_stamp;
-	internal.frames_sent = stats->frames_sent;
-	internal.frames_received = stats->frames_received;
-	internal.out_of_order_errors = stats->out_of_order_errors;
-	internal.frame_id_errors = stats->frame_id_errors;
-	internal.payload_errors = stats->payload_errors;
-
-	internal.round_trip_min = stats->round_trip_min;
-	internal.round_trip_max = stats->round_trip_max;
-	internal.round_trip_outliers = stats->round_trip_outliers;
-	internal.round_trip_avg = stats->round_trip_avg;
-
-	internal.oneway_min = stats->oneway_min;
-	internal.oneway_max = stats->oneway_max;
-	internal.oneway_outliers = stats->oneway_outliers;
-	internal.oneway_avg = stats->oneway_avg;
-
-	ring_buffer_add(log_via_mqtt_global_log_ring_buffer, (const unsigned char *)&internal,
-			sizeof(struct log_statistics));
-}
-
 static void log_via_mqtt_add_traffic_class(struct mosquitto *mosq, const char *mqtt_base_topic_name,
-					   struct log_statistics *stat)
+					   struct statistics *stat, const char *name)
 {
 	char stat_message[2048] = {}, *p;
 	size_t stat_message_length;
@@ -142,11 +92,11 @@ static void log_via_mqtt_add_traffic_class(struct mosquitto *mosq, const char *m
 			   "\t\t\t\"PayloadErrors\" : %" PRIu64 ",\n"
 			   "\t\t\t\"RoundTripOutliers\" : %" PRIu64 ",\n"
 			   "\t\t\t\"OnewayOutliers\" : %" PRIu64 "\n\t\t}",
-			   "stats", stat_frame_type_to_string(stat->frame_type), stat->frames_sent,
-			   stat->frames_received, stat->round_trip_min, stat->round_trip_max,
-			   stat->round_trip_avg, stat->oneway_min, stat->oneway_max,
-			   stat->oneway_avg, stat->out_of_order_errors, stat->frame_id_errors,
-			   stat->payload_errors, stat->round_trip_outliers, stat->oneway_outliers);
+			   "stats", name, stat->frames_sent, stat->frames_received,
+			   stat->round_trip_min, stat->round_trip_max, stat->round_trip_avg,
+			   stat->oneway_min, stat->oneway_max, stat->oneway_avg,
+			   stat->out_of_order_errors, stat->frame_id_errors, stat->payload_errors,
+			   stat->round_trip_outliers, stat->oneway_outliers);
 
 	p += written;
 	stat_message_length -= written;
@@ -170,12 +120,10 @@ static void log_via_mqtt_on_connect(struct mosquitto *mosq, void *obj, int reaso
 
 static void *log_via_mqtt_thread_routine(void *data)
 {
-	uint64_t period_ns = app_config.log_via_mqtt_thread_period_ns;
+	uint64_t period_ns = app_config.stats_collection_interval_ns;
 	struct log_via_mqtt_thread_context *mqtt_context = data;
-	struct log_statistics stats[10 * NUM_FRAME_TYPES];
 	int ret, connect_status;
 	struct timespec time;
-	size_t log_data_len;
 
 	mosquitto_lib_init();
 
@@ -213,8 +161,7 @@ static void *log_via_mqtt_thread_routine(void *data)
 	}
 
 	while (!mqtt_context->stop) {
-		struct log_statistics *curr_stats;
-		int nof_read_elements;
+		int i;
 
 		increment_period(&time, period_ns);
 		ret = clock_nanosleep(app_config.application_clock_id, TIMER_ABSTIME, &time, NULL);
@@ -223,15 +170,17 @@ static void *log_via_mqtt_thread_routine(void *data)
 			goto err_time;
 		}
 
-		ring_buffer_fetch(mqtt_context->mqtt_log_ring_buffer, (unsigned char *)&stats,
-				  LOGVIAMQTT_BUFFER_SIZE, &log_data_len);
-		nof_read_elements = log_data_len / sizeof(struct log_statistics);
+		/* Get latest statistics data */
+		stat_get_stats_per_period(statistics_per_period, sizeof(statistics_per_period));
 
-		curr_stats = (struct log_statistics *)stats;
-		for (int i = 0; i < nof_read_elements; i++)
-			log_via_mqtt_add_traffic_class(mqtt_context->mosq,
-						       app_config.log_via_mqtt_measurement_name,
-						       &curr_stats[i]);
+		/* Publish via MQTT */
+		for (i = 0; i < NUM_FRAME_TYPES; i++) {
+			if (config_is_traffic_class_active(stat_frame_type_to_string(i)))
+				log_via_mqtt_add_traffic_class(
+					mqtt_context->mosq,
+					app_config.log_via_mqtt_measurement_name,
+					&statistics_per_period[i], stat_frame_type_to_string(i));
+		}
 	}
 
 	return NULL;
@@ -261,8 +210,6 @@ struct log_via_mqtt_thread_context *log_via_mqtt_thread_create(void)
 	init_val = log_via_mqtt_init();
 	if (init_val != 0)
 		goto err_thread;
-
-	mqtt_context->mqtt_log_ring_buffer = log_via_mqtt_global_log_ring_buffer;
 
 	ret = create_rt_thread(&mqtt_context->mqtt_log_task_id, "LoggerGraph",
 			       app_config.log_via_mqtt_thread_priority,
@@ -304,7 +251,6 @@ void log_via_mqtt_thread_stop(struct log_via_mqtt_thread_context *thread_context
 
 void log_via_mqtt_free(void)
 {
-	ring_buffer_free(log_via_mqtt_global_log_ring_buffer);
 }
 
 void log_via_mqtt_thread_wait_for_finish(struct log_via_mqtt_thread_context *thread_context)

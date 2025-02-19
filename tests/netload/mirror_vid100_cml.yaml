@@ -37,7 +37,6 @@ RTC:
   RtcInterface: enp3s0
   RtcDestination: a8:74:1d:9d:36:14
 Log:
-  LogThreadPeriodNS: 500000000
   LogThreadPriority: 1
   LogThreadCpu: 7
   LogFile: /var/log/mirror_vid100.log

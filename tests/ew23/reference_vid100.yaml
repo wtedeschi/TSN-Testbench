@@ -37,7 +37,6 @@ TSNHigh:
   TsnHighInterface: enp88s0
   TsnHighDestination: 48:21:0b:26:3f:fb
 Log:
-  LogThreadPeriodNS: 500000000
   LogThreadPriority: 1
   LogThreadCpu: 0
   LogFile: /var/log/reference_vid100.log

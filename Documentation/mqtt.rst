@@ -12,11 +12,16 @@ MQTT and Grafana Integration
 Motivation
 ----------
 
-With the introduction of MQTT logging the visualization if the statistics is fostered by usage of Grafana. The full chain from MQTT log to Grafana is provided with this extension.
-This extension provides a visualization of data in grafical format, which is desired for some use cases, e.g. long term analysis, several instances of the Linux TSN testbench running, and showcases.
-The combination MQTT/Grafana is chosen as it is the most recognized and used application for data visualization, but requires additional services for the visualization. Those services are Telegraf and InfluxDB.
-Telegraf performs the transfer of the MQTT data into InfluxDB insertions. InfluxDB itself is the data provider for Grafana.
-The configuration for those services are provided allowing the direct start with data visualization with Grafana. A docker-composer file that allows that can be generated via a bash script provided.
+With the introduction of MQTT logging the visualization if the statistics is fostered by usage of
+Grafana. The full chain from MQTT log to Grafana is provided with this extension.  This extension
+provides a visualization of data in grafical format, which is desired for some use cases, e.g. long
+term analysis, several instances of the Linux RealTime Communication Testbench running, and
+showcases.  The combination MQTT/Grafana is chosen as it is the most recognized and used application
+for data visualization, but requires additional services for the visualization. Those services are
+Telegraf and InfluxDB.  Telegraf performs the transfer of the MQTT data into InfluxDB
+insertions. InfluxDB itself is the data provider for Grafana.  The configuration for those services
+are provided allowing the direct start with data visualization with Grafana. A docker-composer file
+that allows that can be generated via a bash script provided.
 
 
 Enabling the build
@@ -51,9 +56,6 @@ The parameters which affect the MQTT integration are presented in the table belo
    * - LogViaMQTTThreadPriority
      - Thread priority for the logging thread, usually low < 7
 
-   * - LogViaMQTTThreadPeriodNS
-     - Interval in which the Logging thread will read push data into MQTT, typically same value as StatsCollectionIntervalNS.
-
    * - LogViaMQTTBrokerIP
      - IP address where MQTT broker is running
 
@@ -77,7 +79,7 @@ an indirect approach to deliver the file was taken. In the docker/mqtt-composer 
 .. code:: bash
 
    cd docker/mqtt-composer
-   ./create_docker_composer.sh
+   ./create_docker_compose.sh
    ./set_permissions.sh
 
 Creating the services
@@ -86,7 +88,7 @@ Creating the services
 The docker-composer.sh makes the integration into Grafana simple.
 A simplistic way to have the Grafana running is it can be used, is to instantiate the docker-compose in the machine where reference is running, by doing that all parameters concerning the MQTT broker are default.
 To instantiate the docker-composer you need docker and docker-compose installed.
-Start the services by issuing the commands below from the tsn-testbench directory.
+Start the services by issuing the commands below from the rtc-testbench directory.
 
 .. code:: bash
 

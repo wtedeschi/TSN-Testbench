@@ -27,6 +27,7 @@
 
 #include "config.h"
 #include "net.h"
+#include "stat.h"
 #include "utils.h"
 
 /*
@@ -90,14 +91,15 @@ static struct sock_filter rtc_frame_filter[] = {
  *   ld vlan_tci
  *   jne #VlanTCI, drop
  *   ldh [14]
- *   jne #0xfc01, drop
+ *   jlt #0xfc01, drop
+ *   jgt #0xfc02, drop
  *   ret #-1
  *   drop: ret #0
  */
 static struct sock_filter rta_frame_filter[] = {
-	{0x28, 0, 0, 0x0000000c}, {0x15, 0, 5, 0x00008892}, {0x20, 0, 0, 0xfffff02c},
-	{0x15, 0, 3, 0x00001234}, {0x28, 0, 0, 0x0000000e}, {0x15, 0, 1, 0x0000fc01},
-	{0x06, 0, 0, 0xffffffff}, {0x06, 0, 0, 0000000000},
+	{0x28, 0, 0, 0x0000000c}, {0x15, 0, 6, 0x00008892}, {0x20, 0, 0, 0xfffff02c},
+	{0x15, 0, 4, 0x00001234}, {0x28, 0, 0, 0x0000000e}, {0x35, 0, 2, 0x0000fc01},
+	{0x25, 1, 0, 0x0000fc02}, {0x06, 0, 0, 0xffffffff}, {0x06, 0, 0, 0000000000},
 };
 
 /*
@@ -302,16 +304,16 @@ int create_tsn_high_socket(void)
 	struct sock_txtime sk_txtime;
 	int socket_fd, ret;
 
-	socket_fd = create_raw_socket(app_config.tsn_high_interface,
-				      app_config.tsn_high_socket_priority);
+	socket_fd = create_raw_socket(app_config.classes[TSN_HIGH_FRAME_TYPE].interface,
+				      app_config.classes[TSN_HIGH_FRAME_TYPE].socket_priority);
 	if (socket_fd < 0) {
 		fprintf(stderr, "Failed to create RAW socket for Profinet TSN High Frames!\n");
 		return socket_fd;
 	}
 
 	/* Adjust filter: VLAN TCI */
-	tsn_high_frame_filter[3].k = app_config.tsn_high_vid | app_config.tsn_high_pcp
-								       << VLAN_PCP_SHIFT;
+	tsn_high_frame_filter[3].k = app_config.classes[TSN_HIGH_FRAME_TYPE].vid |
+				     app_config.classes[TSN_HIGH_FRAME_TYPE].pcp << VLAN_PCP_SHIFT;
 
 	ret = setsockopt(socket_fd, SOL_SOCKET, SO_ATTACH_FILTER, &tsn_high_filter_program,
 			 sizeof(tsn_high_filter_program));
@@ -328,7 +330,7 @@ int create_tsn_high_socket(void)
 	}
 
 	/* Enable SO_TXTIME */
-	if (!app_config.tsn_high_tx_time_enabled)
+	if (!app_config.classes[TSN_HIGH_FRAME_TYPE].tx_time_enabled)
 		goto out;
 
 	sk_txtime.clockid = CLOCK_TAI; /* For hardware offload CLOCK_TAI is mandatory */
@@ -354,16 +356,16 @@ int create_tsn_low_socket(void)
 	struct sock_txtime sk_txtime;
 	int socket_fd, ret;
 
-	socket_fd =
-		create_raw_socket(app_config.tsn_low_interface, app_config.tsn_low_socket_priority);
+	socket_fd = create_raw_socket(app_config.classes[TSN_LOW_FRAME_TYPE].interface,
+				      app_config.classes[TSN_LOW_FRAME_TYPE].socket_priority);
 	if (socket_fd < 0) {
 		fprintf(stderr, "Failed to create RAW socket for Profinet TSN Low Frames!\n");
 		return socket_fd;
 	}
 
 	/* Adjust filter: VLAN TCI */
-	tsn_low_frame_filter[3].k = app_config.tsn_low_vid | app_config.tsn_low_pcp
-								     << VLAN_PCP_SHIFT;
+	tsn_low_frame_filter[3].k = app_config.classes[TSN_LOW_FRAME_TYPE].vid |
+				    app_config.classes[TSN_LOW_FRAME_TYPE].pcp << VLAN_PCP_SHIFT;
 
 	ret = setsockopt(socket_fd, SOL_SOCKET, SO_ATTACH_FILTER, &tsn_low_filter_program,
 			 sizeof(tsn_low_filter_program));
@@ -380,7 +382,7 @@ int create_tsn_low_socket(void)
 	}
 
 	/* Enable SO_TXTIME */
-	if (!app_config.tsn_low_tx_time_enabled)
+	if (!app_config.classes[TSN_LOW_FRAME_TYPE].tx_time_enabled)
 		goto out;
 
 	sk_txtime.clockid = CLOCK_TAI; /* For hardware offload CLOCK_TAI is mandatory */
@@ -405,14 +407,16 @@ int create_rtc_socket(void)
 						      .filter = rtc_frame_filter};
 	int socket_fd, ret;
 
-	socket_fd = create_raw_socket(app_config.rtc_interface, app_config.rtc_socket_priority);
+	socket_fd = create_raw_socket(app_config.classes[RTC_FRAME_TYPE].interface,
+				      app_config.classes[RTC_FRAME_TYPE].socket_priority);
 	if (socket_fd < 0) {
 		fprintf(stderr, "Failed to create RAW socket for Profinet RTC Frames!\n");
 		return socket_fd;
 	}
 
 	/* Adjust filter: VLAN TCI */
-	rtc_frame_filter[3].k = app_config.rtc_vid | app_config.rtc_pcp << VLAN_PCP_SHIFT;
+	rtc_frame_filter[3].k = app_config.classes[RTC_FRAME_TYPE].vid |
+				app_config.classes[RTC_FRAME_TYPE].pcp << VLAN_PCP_SHIFT;
 
 	ret = setsockopt(socket_fd, SOL_SOCKET, SO_ATTACH_FILTER, &rtc_filter_program,
 			 sizeof(rtc_filter_program));
@@ -441,14 +445,16 @@ int create_rta_socket(void)
 						      .filter = rta_frame_filter};
 	int socket_fd, ret;
 
-	socket_fd = create_raw_socket(app_config.rta_interface, app_config.rta_socket_priority);
+	socket_fd = create_raw_socket(app_config.classes[RTA_FRAME_TYPE].interface,
+				      app_config.classes[RTA_FRAME_TYPE].socket_priority);
 	if (socket_fd < 0) {
-		fprintf(stderr, "Failed to create RAW socket for Profinet RTC Frames!\n");
+		fprintf(stderr, "Failed to create RAW socket for Profinet RTA Frames!\n");
 		return socket_fd;
 	}
 
 	/* Adjust filter: VLAN TCI */
-	rta_frame_filter[3].k = app_config.rta_vid | app_config.rta_pcp << VLAN_PCP_SHIFT;
+	rta_frame_filter[3].k = app_config.classes[RTA_FRAME_TYPE].vid |
+				app_config.classes[RTA_FRAME_TYPE].pcp << VLAN_PCP_SHIFT;
 
 	ret = setsockopt(socket_fd, SOL_SOCKET, SO_ATTACH_FILTER, &rta_filter_program,
 			 sizeof(rta_filter_program));
@@ -477,14 +483,16 @@ int create_dcp_socket(void)
 						      .filter = dcp_frame_filter};
 	int socket_fd, ret;
 
-	socket_fd = create_raw_socket(app_config.dcp_interface, app_config.dcp_socket_priority);
+	socket_fd = create_raw_socket(app_config.classes[DCP_FRAME_TYPE].interface,
+				      app_config.classes[DCP_FRAME_TYPE].socket_priority);
 	if (socket_fd < 0) {
 		fprintf(stderr, "Failed to create RAW socket for Profinet DCP Frames!\n");
 		return socket_fd;
 	}
 
 	/* Adjust filter: VLAN TCI */
-	dcp_frame_filter[3].k = app_config.dcp_vid | app_config.dcp_pcp << VLAN_PCP_SHIFT;
+	dcp_frame_filter[3].k = app_config.classes[DCP_FRAME_TYPE].vid |
+				app_config.classes[DCP_FRAME_TYPE].pcp << VLAN_PCP_SHIFT;
 
 	ret = setsockopt(socket_fd, SOL_SOCKET, SO_ATTACH_FILTER, &dcp_filter_program,
 			 sizeof(dcp_filter_program));
@@ -513,7 +521,8 @@ int create_lldp_socket(void)
 						       .filter = lldp_frame_filter};
 	int socket_fd, ret;
 
-	socket_fd = create_raw_socket(app_config.lldp_interface, app_config.lldp_socket_priority);
+	socket_fd = create_raw_socket(app_config.classes[LLDP_FRAME_TYPE].interface,
+				      app_config.classes[LLDP_FRAME_TYPE].socket_priority);
 	if (socket_fd < 0) {
 		fprintf(stderr, "Failed to create RAW socket for LLDP Frames!\n");
 		return socket_fd;
@@ -547,17 +556,18 @@ int create_generic_l2_socket(void)
 	struct sock_txtime sk_txtime;
 	int socket_fd, ret;
 
-	socket_fd = create_raw_socket(app_config.generic_l2_interface,
-				      app_config.generic_l2_socket_priority);
+	socket_fd = create_raw_socket(app_config.classes[GENERICL2_FRAME_TYPE].interface,
+				      app_config.classes[GENERICL2_FRAME_TYPE].socket_priority);
 	if (socket_fd < 0) {
 		fprintf(stderr, "Failed to create RAW socket for Generic L2 Frames!\n");
 		return socket_fd;
 	}
 
 	/* Adjust filter: EtherType and VLAN TCI */
-	generic_l2_frame_filter[1].k = app_config.generic_l2_ether_type;
-	generic_l2_frame_filter[3].k = app_config.generic_l2_vid | app_config.generic_l2_pcp
-									   << VLAN_PCP_SHIFT;
+	generic_l2_frame_filter[1].k = app_config.classes[GENERICL2_FRAME_TYPE].ether_type;
+	generic_l2_frame_filter[3].k = app_config.classes[GENERICL2_FRAME_TYPE].vid |
+				       app_config.classes[GENERICL2_FRAME_TYPE].pcp
+					       << VLAN_PCP_SHIFT;
 
 	ret = setsockopt(socket_fd, SOL_SOCKET, SO_ATTACH_FILTER, &generic_l2_filter_program,
 			 sizeof(generic_l2_filter_program));
@@ -574,7 +584,7 @@ int create_generic_l2_socket(void)
 	}
 
 	/* Enable SO_TXTIME */
-	if (!app_config.generic_l2_tx_time_enabled)
+	if (!app_config.classes[GENERICL2_FRAME_TYPE].tx_time_enabled)
 		goto out;
 
 	sk_txtime.clockid = CLOCK_TAI; /* For hardware offload CLOCK_TAI is mandatory */

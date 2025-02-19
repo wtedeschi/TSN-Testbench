@@ -1,26 +1,46 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
- * Copyright (C) 2021-2024 Linutronix GmbH
+ * Copyright (C) 2021-2025 Linutronix GmbH
  * Author Kurt Kanzenbach <kurt@linutronix.de>
  */
 
 #include <errno.h>
 #include <inttypes.h>
 #include <memory.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
 #include "config.h"
+#include "hist.h"
 #include "log.h"
 #include "logviamqtt.h"
 #include "stat.h"
+#include "thread.h"
 #include "utils.h"
 
-struct statistics global_statistics[NUM_FRAME_TYPES];
-struct statistics global_statistics_per_period[NUM_FRAME_TYPES];
-struct statistics global_statistics_per_period_prep[NUM_FRAME_TYPES];
-struct round_trip_context round_trip_contexts[NUM_FRAME_TYPES];
+/*
+ * This is used by all real time Tx and Rx threads. However, all threads have their own portion
+ * within that struct so that it can be accessed without taking any locks. That is a must, because
+ * Tx and Rx are hot paths and we do not want to wait for logging or such.
+ */
+static struct statistics global_statistics[NUM_FRAME_TYPES];
+
+/*
+ * Once per stat collection interval the global_statistics are copied to global_statistics_for_log
+ * for the log threads. That is used for file Log at the moment.
+ */
+static struct statistics global_statistics_for_log[NUM_FRAME_TYPES];
+static pthread_mutex_t global_statistics_mutex;
+
+/*
+ * These structs contains only the statistics for current stat interval. This is used by MQTT.
+ */
+static struct statistics statistics_per_period[NUM_FRAME_TYPES];
+static struct statistics statistics_per_period_for_log[NUM_FRAME_TYPES];
+
+static struct round_trip_context round_trip_contexts[NUM_FRAME_TYPES];
 static uint64_t rtt_expected_rt_limit;
 static int log_stat_user_selected;
 static FILE *file_tracing_on;
@@ -37,36 +57,30 @@ const char *stat_frame_type_names[NUM_FRAME_TYPES] = {
  */
 #define STAT_MAX_BACKLOG 1024
 
+static void stat_reset(struct statistics *stats)
+{
+	memset(stats, 0, sizeof(struct statistics));
+	stats->round_trip_min = UINT64_MAX;
+	stats->oneway_min = UINT64_MAX;
+}
+
 int stat_init(enum log_stat_options log_selection)
 {
+	int i;
 
 	if (log_selection >= LOG_NUM_OPTIONS)
 		return -EINVAL;
 
+	init_mutex(&global_statistics_mutex);
+
 	if (log_selection == LOG_REFERENCE) {
 		bool allocation_error = false;
 
-		round_trip_contexts[TSN_HIGH_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.tsn_high_num_frames_per_cycle;
-		round_trip_contexts[TSN_LOW_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.tsn_low_num_frames_per_cycle;
-		round_trip_contexts[RTC_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.rtc_num_frames_per_cycle;
-		round_trip_contexts[RTA_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.rta_num_frames_per_cycle;
-		round_trip_contexts[DCP_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.dcp_num_frames_per_cycle;
-		round_trip_contexts[LLDP_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.lldp_num_frames_per_cycle;
-		round_trip_contexts[UDP_HIGH_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.udp_high_num_frames_per_cycle;
-		round_trip_contexts[UDP_LOW_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.udp_low_num_frames_per_cycle;
-		round_trip_contexts[GENERICL2_FRAME_TYPE].backlog_len =
-			STAT_MAX_BACKLOG * app_config.generic_l2_num_frames_per_cycle;
-
-		for (int i = 0; i < NUM_FRAME_TYPES; i++) {
+		for (i = 0; i < NUM_FRAME_TYPES; i++) {
 			struct round_trip_context *current_context = &round_trip_contexts[i];
+
+			current_context->backlog_len =
+				STAT_MAX_BACKLOG * app_config.classes[i].num_frames_per_cycle;
 
 			current_context->backlog =
 				calloc(current_context->backlog_len, sizeof(int64_t));
@@ -77,19 +91,9 @@ int stat_init(enum log_stat_options log_selection)
 			return -ENOMEM;
 	}
 
-	for (int i = 0; i < NUM_FRAME_TYPES; i++) {
-		struct statistics *current_stats = &global_statistics[i];
-
-		current_stats->round_trip_min = UINT64_MAX;
-		current_stats->round_trip_max = 0;
-		current_stats->oneway_min = UINT64_MAX;
-		current_stats->oneway_max = 0;
-
-		current_stats = &global_statistics_per_period[i];
-		current_stats->round_trip_min = UINT64_MAX;
-		current_stats->round_trip_max = 0;
-		current_stats->oneway_min = UINT64_MAX;
-		current_stats->oneway_max = 0;
+	for (i = 0; i < NUM_FRAME_TYPES; i++) {
+		stat_reset(&global_statistics[i]);
+		stat_reset(&statistics_per_period[i]);
 	}
 
 	if (app_config.debug_stop_trace_on_outlier) {
@@ -127,6 +131,142 @@ void stat_free(void)
 	}
 }
 
+/*
+ * This function will be called once per cycle after all Tx threads have been finished. At this
+ * point in time no one touches global_statistics, because all networking is done.
+ *
+ * It copies all *statistics to *statistics_for_log.
+ */
+void stat_update(void)
+{
+	static uint64_t last_ts = 0;
+	uint64_t elapsed, curr_time;
+	bool proceed = false;
+	struct timespec now;
+
+	clock_gettime(app_config.application_clock_id, &now);
+	curr_time = ts_to_ns(&now);
+
+	if (!last_ts)
+		last_ts = curr_time;
+
+	elapsed = curr_time - last_ts;
+	if (elapsed >= app_config.stats_collection_interval_ns) {
+		proceed = true;
+		last_ts = curr_time;
+	}
+
+	if (!proceed)
+		return;
+
+	/* Update stats for logging facilities. */
+	pthread_mutex_lock(&global_statistics_mutex);
+	memcpy(&global_statistics_for_log, &global_statistics, sizeof(global_statistics));
+#if defined(WITH_MQTT)
+	memcpy(&statistics_per_period_for_log, &statistics_per_period,
+	       sizeof(statistics_per_period));
+	for (int i = 0; i < NUM_FRAME_TYPES; i++)
+		stat_reset(&statistics_per_period[i]);
+#endif
+	pthread_mutex_unlock(&global_statistics_mutex);
+}
+
+void stat_get_global_stats(struct statistics *stats, size_t len)
+{
+	if (len < sizeof(global_statistics_for_log))
+		return;
+
+	pthread_mutex_lock(&global_statistics_mutex);
+	memcpy(stats, &global_statistics_for_log, sizeof(global_statistics_for_log));
+	pthread_mutex_unlock(&global_statistics_mutex);
+}
+
+void stat_get_stats_per_period(struct statistics *stats, size_t len)
+{
+	if (len < sizeof(statistics_per_period_for_log))
+		return;
+
+	pthread_mutex_lock(&global_statistics_mutex);
+	memcpy(stats, &statistics_per_period_for_log, sizeof(statistics_per_period_for_log));
+	pthread_mutex_unlock(&global_statistics_mutex);
+}
+
+static inline void stat_update_min_max(uint64_t new_value, uint64_t *min, uint64_t *max)
+{
+	*max = (new_value > *max) ? new_value : *max;
+	*min = (new_value < *min) ? new_value : *min;
+}
+
+static bool stat_frame_received_common(struct statistics *stat, enum stat_frame_type frame_type,
+				       uint64_t rt_time, uint64_t oneway_time, bool out_of_order,
+				       bool payload_mismatch, bool frame_id_mismatch)
+{
+	bool outlier = false;
+
+	if (log_stat_user_selected == LOG_REFERENCE) {
+		if (stat_frame_type_is_real_time(frame_type) && rt_time > rtt_expected_rt_limit) {
+			stat->round_trip_outliers++;
+			outlier = true;
+		}
+
+		stat_update_min_max(rt_time, &stat->round_trip_min, &stat->round_trip_max);
+
+		stat->round_trip_count++;
+		stat->round_trip_sum += rt_time;
+		stat->round_trip_avg = stat->round_trip_sum / (double)stat->round_trip_count;
+	}
+
+	stat_update_min_max(oneway_time, &stat->oneway_min, &stat->oneway_max);
+
+	if (stat_frame_type_is_real_time(frame_type) && oneway_time > rtt_expected_rt_limit / 2) {
+		stat->oneway_outliers++;
+		outlier = true;
+	}
+	stat->oneway_count++;
+	stat->oneway_sum += oneway_time;
+	stat->oneway_avg = stat->oneway_sum / (double)stat->oneway_count;
+
+	stat->frames_received++;
+	stat->out_of_order_errors += out_of_order;
+	stat->payload_errors += payload_mismatch;
+	stat->frame_id_errors += frame_id_mismatch;
+
+	return outlier;
+}
+
+#if defined(WITH_MQTT)
+static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint64_t curr_time,
+					   uint64_t rt_time, uint64_t oneway_time,
+					   bool out_of_order, bool payload_mismatch,
+					   bool frame_id_mismatch)
+{
+	struct statistics *stat_per_period = &statistics_per_period[frame_type];
+
+	stat_per_period->time_stamp = curr_time;
+	stat_frame_received_common(stat_per_period, frame_type, rt_time, oneway_time, out_of_order,
+				   payload_mismatch, frame_id_mismatch);
+}
+
+static void stat_frame_sent_per_period(enum stat_frame_type frame_type)
+{
+	struct statistics *stat_per_period = &statistics_per_period[frame_type];
+
+	/* Just increment the Tx counter. The reset per period is done by the Rx part. */
+	stat_per_period->frames_sent++;
+}
+#else
+static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint64_t curr_time,
+					   uint64_t rt_time, bool out_of_order,
+					   bool payload_mismatch, bool frame_id_mismatch,
+					   uint64_t tx_timestamp)
+{
+}
+
+static void stat_frame_sent_per_period(enum stat_frame_type frame_type)
+{
+}
+#endif
+
 void stat_frame_sent(enum stat_frame_type frame_type, uint64_t cycle_number)
 {
 	struct round_trip_context *rtt = &round_trip_contexts[frame_type];
@@ -143,93 +283,15 @@ void stat_frame_sent(enum stat_frame_type frame_type, uint64_t cycle_number)
 	}
 
 	/* Increment stats */
+	stat_frame_sent_per_period(frame_type);
 	stat->frames_sent++;
 }
-
-static inline void stat_update_min_max(uint64_t new_value, uint64_t *min, uint64_t *max)
-{
-	*max = (new_value > *max) ? new_value : *max;
-	*min = (new_value < *min) ? new_value : *min;
-}
-
-#if defined(WITH_MQTT)
-static void stats_reset_stats(struct statistics *stats)
-{
-	memset(stats, 0, sizeof(struct statistics));
-	stats->round_trip_min = UINT64_MAX;
-	stats->oneway_min = UINT64_MAX;
-}
-
-static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint64_t curr_time,
-					   uint64_t rt_time, uint64_t oneway_time,
-					   bool out_of_order, bool payload_mismatch,
-					   bool frame_id_mismatch)
-{
-	struct statistics *stat_per_period_pre = &global_statistics_per_period_prep[frame_type];
-	uint64_t elapsed_t;
-
-	if (stat_per_period_pre->first_time_stamp == 0)
-		stat_per_period_pre->first_time_stamp = curr_time;
-
-	/*
-	 * Test if the amount of time specified in the config is arrived.  if true this will be the
-	 * last point to be taken into stats per period
-	 */
-	elapsed_t = curr_time - stat_per_period_pre->first_time_stamp;
-	if (elapsed_t >= app_config.stats_collection_interval_ns) {
-		stat_per_period_pre->ready = true;
-		stat_per_period_pre->last_time_stamp = curr_time;
-	}
-
-	if (log_stat_user_selected == LOG_REFERENCE) {
-		if (stat_frame_type_is_real_time(frame_type) && rt_time > rtt_expected_rt_limit)
-			stat_per_period_pre->round_trip_outliers++;
-		stat_update_min_max(rt_time, &stat_per_period_pre->round_trip_min,
-				    &stat_per_period_pre->round_trip_max);
-
-		stat_per_period_pre->round_trip_count++;
-		stat_per_period_pre->round_trip_sum += rt_time;
-		stat_per_period_pre->round_trip_avg = stat_per_period_pre->round_trip_sum /
-						      (double)stat_per_period_pre->round_trip_count;
-	}
-
-	stat_update_min_max(oneway_time, &stat_per_period_pre->oneway_min,
-			    &stat_per_period_pre->oneway_max);
-
-	if (stat_frame_type_is_real_time(frame_type) && oneway_time > rtt_expected_rt_limit / 2)
-		stat_per_period_pre->oneway_outliers++;
-	stat_per_period_pre->oneway_count++;
-	stat_per_period_pre->oneway_sum += oneway_time;
-	stat_per_period_pre->oneway_avg =
-		stat_per_period_pre->oneway_sum / (double)stat_per_period_pre->oneway_count;
-
-	stat_per_period_pre->frames_received++;
-	stat_per_period_pre->out_of_order_errors += out_of_order;
-	stat_per_period_pre->payload_errors += payload_mismatch;
-	stat_per_period_pre->frame_id_errors += frame_id_mismatch;
-
-	/*
-	 * Final bits can be used in the logger reseting copying actual values and reseting the
-	 * preparation
-	 */
-	if (stat_per_period_pre->ready) {
-		log_via_mqtt_stats(frame_type, &global_statistics_per_period_prep[frame_type]);
-		stats_reset_stats(&global_statistics_per_period_prep[frame_type]);
-	}
-}
-#else
-static void stat_frame_received_per_period(enum stat_frame_type frame_type, uint64_t curr_time,
-					   uint64_t rt_time, bool out_of_order,
-					   bool payload_mismatch, bool frame_id_mismatch,
-					   uint64_t tx_timestamp)
-{
-}
-#endif
 
 void stat_frame_received(enum stat_frame_type frame_type, uint64_t cycle_number, bool out_of_order,
 			 bool payload_mismatch, bool frame_id_mismatch, uint64_t tx_timestamp)
 {
 	struct round_trip_context *rtt = &round_trip_contexts[frame_type];
+	const bool histogram = app_config.stats_histogram_enabled;
 	struct statistics *stat = &global_statistics[frame_type];
 	uint64_t rt_time = 0, curr_time, oneway_time;
 	struct timespec rx_time = {};
@@ -243,33 +305,24 @@ void stat_frame_received(enum stat_frame_type frame_type, uint64_t cycle_number,
 	curr_time = ts_to_ns(&rx_time);
 
 	if (log_stat_user_selected == LOG_REFERENCE) {
+		/* Calc Round Trip Time */
 		rt_time = curr_time - rtt->backlog[cycle_number % rtt->backlog_len];
 		rt_time /= 1000;
 
-		stat_update_min_max(rt_time, &stat->round_trip_min, &stat->round_trip_max);
-
-		if (stat_frame_type_is_real_time(frame_type) && rt_time > rtt_expected_rt_limit) {
-			stat->round_trip_outliers++;
-			outlier = true;
-		}
-		stat->round_trip_count++;
-		stat->round_trip_sum += rt_time;
-		stat->round_trip_avg = stat->round_trip_sum / (double)stat->round_trip_count;
+		/* Update histogram */
+		if (histogram)
+			histogram_update(frame_type, rt_time);
 	}
 
+	/* Calc Oneway Time */
 	oneway_time = curr_time - tx_timestamp;
 	oneway_time /= 1000;
 
-	stat_update_min_max(oneway_time, &stat->oneway_min, &stat->oneway_max);
+	/* Update global stats */
+	outlier = stat_frame_received_common(stat, frame_type, rt_time, oneway_time, out_of_order,
+					     payload_mismatch, frame_id_mismatch);
 
-	if (stat_frame_type_is_real_time(frame_type) && oneway_time > rtt_expected_rt_limit / 2) {
-		stat->oneway_outliers++;
-		outlier = true;
-	}
-	stat->oneway_count++;
-	stat->oneway_sum += oneway_time;
-	stat->oneway_avg = stat->oneway_sum / (double)stat->oneway_count;
-
+	/* Update stats per collection interval */
 	stat_frame_received_per_period(frame_type, curr_time, rt_time, oneway_time, out_of_order,
 				       payload_mismatch, frame_id_mismatch);
 
@@ -288,10 +341,4 @@ void stat_frame_received(enum stat_frame_type frame_type, uint64_t cycle_number,
 		fclose(file_tracing_on);
 		exit(EXIT_SUCCESS);
 	}
-
-	/* Increment stats */
-	stat->frames_received++;
-	stat->out_of_order_errors += out_of_order;
-	stat->payload_errors += payload_mismatch;
-	stat->frame_id_errors += frame_id_mismatch;
 }

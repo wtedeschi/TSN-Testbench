@@ -1,0 +1,51 @@
+---
+#
+# Copyright (C) 2022 Linutronix GmbH
+# Author Kurt Kanzenbach <kurt@linutronix.de>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Sample OPC/UA PubSub mirror YAML configuration file for Intel TSN NICs.
+#
+Application:
+  ApplicationClockId: CLOCK_TAI
+  # ApplicationBaseStartTimeNS: 0
+  ApplicationBaseCycleTimeNS: 1000000
+  ApplicationTxBaseOffsetNS: 800000
+  ApplicationRxBaseOffsetNS: 600000
+  ApplicationXdpProgram: xdp_kern_avtp_vid400.o
+GenericL2:
+  GenericL2Name: Avtp
+  GenericL2Enabled: true
+  GenericL2XdpEnabled: false
+  GenericL2XdpSkbMode: false
+  GenericL2XdpZcMode: true
+  GenericL2XdpWakeupMode: false
+  GenericL2TxTimeEnabled: true
+  GenericL2TxTimeOffsetNS: 300000
+  GenericL2Vid: 400
+  GenericL2Pcp: 6
+  GenericL2EtherType: 0x22f1
+  GenericL2NumFramesPerCycle: 8
+  GenericL2PayloadPattern: |
+    AvtpPayloadPattern
+  GenericL2FrameLength: 128
+  GenericL2RxQueue: 7
+  GenericL2TxQueue: 7
+  GenericL2SocketPriority: 7
+  GenericL2TxThreadPriority: 97
+  GenericL2RxThreadPriority: 97
+  GenericL2TxThreadCpu: 1
+  GenericL2RxThreadCpu: 1
+  GenericL2Interface: enp0s29f2
+  GenericL2Destination: 4e:e4:85:53:c8:79
+Log:
+  LogThreadPriority: 1
+  LogThreadCpu: 1
+  LogFile: /var/log/mirror_avtp_vid400.log
+  LogLevel: Info
+Debug:
+  DebugStopTraceOnOutlier: false
+  DebugStopTraceOnError: false
+  DebugMonitorMode: false
+  DebugMonitorDestination: 44:44:44:44:44:44

@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: TSN-Testbench
+Upstream-Name: RTC-Testbench
 Upstream-Contact: Kurt Kanzenbach <kurt@linutronix.de>
-Source: https://www.github.com/Linutronix/TSN-Testbench
+Source: https://www.github.com/Linutronix/RTC-Testbench
 
 Files: .clang-format .clang-tidy .dir-locals.el CONTRIBUTING.md Documentation/Makefile Documentation/conf.py
 Copyright: 2020-2024 Linutronix GmbH
@@ -11,13 +11,9 @@ Files: Documentation/images/*.png Documentation/make.bat ISSUE_TEMPLATE.md READM
 Copyright: 2020-2024 Linutronix GmbH
 License: BSD-2-Clause
 
-Files: .github/workflows/sphinx.yml devtools/conda-envs/docs_env.yaml requirements.txt
+Files: .github/workflows/sphinx.yml devtools/conda-envs/docs_env.yaml requirements.txt .github/labels.yml .github/workflows/label.yml
 Copyright: 2024 Pablo Iranzo Gómez <Pablo.Iranzo@gmail.com>
 License: BSD-2-Clause
-
-Files: debian/*
-Copyright: 2023-2024 Linutronix GmbH
-License: GPL-2.0-or-later
 
 Files: docker/mqtt-composer/*
 Copyright: 2024 Intel Corporation
